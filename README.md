@@ -1,5 +1,7 @@
 # Box.STL — Parametric Box Generator for 3D Printing
 
+**Live: <https://zazaulola.github.io/just-in-print-box-generator/>**
+
 A single-file, dependency-free web page that generates ready-to-slice binary STL
 files of parametric boxes. Open `index.html` in any browser — it works fully
 offline: geometry, 3D preview, and STL export all run client-side in plain
