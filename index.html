@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Box.STL — Parametric Box Generator for 3D Printing</title>
+<style>
+  :root {
+    --bg: #101318;
+    --panel: #171b21;
+    --panel-2: #1d222a;
+    --line: #262c35;
+    --line-soft: #20252d;
+    --text: #e8e4da;
+    --muted: #8b93a0;
+    --accent: #ff8a00;
+    --accent-dim: #b36308;
+    --cyan: #59d1c8;
+    --warn: #ffb454;
+    --err: #ff6b5e;
+    --font-disp: "Avenir Next Condensed", "Futura", "Arial Narrow", sans-serif;
+    --font-body: "Avenir Next", "Futura", "Helvetica Neue", sans-serif;
+    --font-mono: "SF Mono", "Menlo", "Consolas", "Courier New", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    display: grid;
+    grid-template-columns: 348px 1fr;
+    overflow: hidden;
+  }
+  body::after { /* grain overlay */
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  }
+
+  /* ───────── left panel ───────── */
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 26px 24px 30px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  header .tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .18em;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    padding: 3px 8px 2px;
+    border-radius: 2px;
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-family: var(--font-disp);
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  header h1 em { font-style: normal; color: var(--accent); }
+  header p {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  .group { margin-top: 26px; }
+  .group-title {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-disp);
+    font-size: 13px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .group-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .group-title .num { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+
+  /* segmented control */
+  .seg {
+    display: grid; grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line); border-radius: 4px;
+    overflow: hidden; margin-bottom: 14px;
+  }
+  .seg button {
+    background: transparent; border: 0; color: var(--muted);
+    font-family: var(--font-body); font-size: 12.5px;
+    padding: 8px 4px; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .seg.quad { grid-template-columns: 1fr 1fr; }
+  .seg.quad button + button { border-left: 0; }
+  .seg.quad button:nth-child(even) { border-left: 1px solid var(--line); }
+  .seg.quad button:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; padding: 6px 0 2px; }
+  .hint b { color: var(--cyan); font-weight: 500; }
+
+  /* parameter row with stepper */
+  .field {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 5px 0;
+  }
+  .field > label { color: var(--text); font-size: 13.5px; }
+  .field > label small { display: block; color: var(--muted); font-size: 11px; margin-top: 1px; }
+  .stepper {
+    display: flex; align-items: stretch;
+    border: 1px solid var(--line); border-radius: 4px;
+    background: var(--panel-2);
+    height: 32px; flex: 0 0 auto;
+  }
+  .stepper button {
+    width: 28px; border: 0; background: transparent;
+    color: var(--muted); font-size: 15px; cursor: pointer;
+    font-family: var(--font-mono);
+    transition: color .1s, background .1s;
+  }
+  .stepper button:hover { color: var(--accent); background: rgba(255,138,0,.06); }
+  .stepper input {
+    width: 58px; border: 0; background: transparent;
+    color: var(--text); text-align: center;
+    font-family: var(--font-mono); font-size: 13.5px;
+    outline: none;
+    border-left: 1px solid var(--line-soft);
+    border-right: 1px solid var(--line-soft);
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  .stepper input::-webkit-outer-spin-button,
+  .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .stepper input:focus { color: var(--accent); }
+  .unit { color: var(--muted); font-family: var(--font-mono); font-size: 11px; width: 22px; text-align: left; }
+
+  /* warnings */
+  #warnings { margin-top: 16px; display: none; }
+  #warnings.show { display: block; }
+  #warnings .w {
+    font-size: 12.5px; color: var(--err);
+    padding: 8px 10px; border: 1px solid rgba(255,107,94,.35);
+    border-left: 3px solid var(--err);
+    border-radius: 3px; margin-bottom: 6px;
+    background: rgba(255,107,94,.06);
+  }
+
+  /* part data sheet */
+  .stats { font-family: var(--font-mono); font-size: 12.5px; }
+  .stats .row {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 4px 0; color: var(--muted);
+  }
+  .stats .row .dots { flex: 1; border-bottom: 1px dotted var(--line); transform: translateY(-3px); }
+  .stats .row b { color: var(--text); font-weight: 500; }
+  .stats .row b i { font-style: normal; color: var(--muted); }
+
+  /* download buttons */
+  .dl { margin-top: 22px; display: grid; gap: 10px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 13px 10px;
+    font-family: var(--font-disp); font-size: 15px;
+    letter-spacing: .12em; text-transform: uppercase;
+    border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--accent);
+    background: var(--accent); color: #14100a;
+    transition: box-shadow .15s, transform .05s, opacity .15s;
+  }
+  .btn:hover { box-shadow: 0 0 24px rgba(255,138,0,.35); }
+  .btn:active { transform: translateY(1px); }
+  .btn.alt { background: transparent; color: var(--accent); }
+  .btn.alt:hover { background: rgba(255,138,0,.08); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+  .btn .arr { font-family: var(--font-mono); }
+
+  footer {
+    margin-top: 22px; padding-top: 14px;
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-family: var(--font-mono);
+    font-size: 10.5px; letter-spacing: .08em;
+  }
+
+  /* ───────── preview ───────── */
+  main { position: relative; overflow: hidden; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  #view.grabbing { cursor: grabbing; }
+  .corner { position: absolute; width: 18px; height: 18px; pointer-events: none; opacity: .5; }
+  .corner.tl { top: 14px; left: 14px; border-top: 1px solid var(--cyan); border-left: 1px solid var(--cyan); }
+  .corner.tr { top: 14px; right: 14px; border-top: 1px solid var(--cyan); border-right: 1px solid var(--cyan); }
+  .corner.bl { bottom: 14px; left: 14px; border-bottom: 1px solid var(--cyan); border-left: 1px solid var(--cyan); }
+  .corner.br { bottom: 14px; right: 14px; border-bottom: 1px solid var(--cyan); border-right: 1px solid var(--cyan); }
+  .hud {
+    position: absolute; pointer-events: none;
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: .1em; color: var(--muted);
+  }
+  .hud.tl { top: 22px; left: 26px; }
+  .hud.tl b { color: var(--cyan); font-weight: 500; }
+  .hud.br { bottom: 22px; right: 26px; text-align: right; color: var(--cyan); }
+  .hud.br .dims { font-size: 13px; color: var(--text); margin-top: 3px; }
+
+  /* narrow screens: preview on top, panel below */
+  @media (max-width: 760px) {
+    body { display: flex; flex-direction: column; overflow-y: auto; height: auto; min-height: 100%; }
+    main { order: -1; flex: 0 0 44vh; min-height: 260px; }
+    aside { border-right: 0; border-top: 1px solid var(--line); overflow: visible; }
+  }
+
+  /* entrance animation */
+  .reveal { animation: rise .55s cubic-bezier(.2,.7,.3,1) backwards; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  main.reveal { animation: fade .8s .2s backwards; }
+  @keyframes fade { from { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<aside>
+  <header class="reveal" style="animation-delay:.02s">
+    <span class="tag">OFFLINE TOOL · v1.0</span>
+    <h1>Box<em>.stl</em></h1>
+    <p>A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. All values are in millimeters.</p>
+  </header>
+
+  <section class="group reveal" style="animation-delay:.08s">
+    <div class="group-title"><span class="num">01</span> Dimensions</div>
+    <div class="seg" id="modeSeg">
+      <button data-mode="outer" class="on">Outer</button>
+      <button data-mode="inner">Inner</button>
+    </div>
+    <div class="field">
+      <label>Length <small>X axis</small></label>
+      <div class="stepper" data-for="len"><button>−</button><input id="len" value="120" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field">
+      <label>Width <small>Y axis</small></label>
+      <div class="stepper" data-for="wid"><button>−</button><input id="wid" value="80" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field">
+      <label>Height <small>Z axis</small></label>
+      <div class="stepper" data-for="hgt"><button>−</button><input id="hgt" value="40" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+  </section>
+
+  <section class="group reveal" style="animation-delay:.14s">
+    <div class="group-title"><span class="num">02</span> Walls</div>
+    <div class="field">
+      <label>Wall thickness</label>
+      <div class="stepper" data-for="wall"><button>−</button><input id="wall" value="1.6" data-step="0.2" data-min="0.2"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field">
+      <label>Floor thickness</label>
+      <div class="stepper" data-for="bot"><button>−</button><input id="bot" value="1.6" data-step="0.2" data-min="0.2"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field">
+      <label>Corner radius <small>0 = sharp corners</small></label>
+      <div class="stepper" data-for="rad"><button>−</button><input id="rad" value="4" data-step="0.5" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+  </section>
+
+  <section class="group reveal" style="animation-delay:.2s">
+    <div class="group-title"><span class="num">03</span> Lid</div>
+    <div class="seg quad" id="lidSeg">
+      <button data-lid="none" class="on">None</button>
+      <button data-lid="inset">Inset</button>
+      <button data-lid="cap">Cap</button>
+      <button data-lid="hinge">Hinge + latch</button>
+    </div>
+    <div class="field" id="fClr" style="display:none">
+      <label>Fit clearance <small>per side</small></label>
+      <div class="stepper" data-for="clr"><button>−</button><input id="clr" value="0.2" data-step="0.05" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field" id="fLip" style="display:none">
+      <label>Lip height</label>
+      <div class="stepper" data-for="lip"><button>−</button><input id="lip" value="6" data-step="0.5" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field" id="fSkirt" style="display:none">
+      <label>Skirt height <small>overlap onto the walls</small></label>
+      <div class="stepper" data-for="skirt"><button>−</button><input id="skirt" value="8" data-step="0.5" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field" id="fLidT" style="display:none">
+      <label>Lid thickness</label>
+      <div class="stepper" data-for="lidT"><button>−</button><input id="lidT" value="1.6" data-step="0.2" data-min="0.4"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="hint" id="hingeNote" style="display:none">
+      Prints as <b>a single pre-assembled piece</b>, closed: a flat lid hinged along
+      the top back edge, plus a swinging latch flap on its own mini-hinge at the
+      front, hanging on a lug in the wall (to open the box, flip the flap up).
+      The pins are grown inside the hinges with 0.45 mm clearance — the first
+      turn breaks them free. Print orientation is up to you: tilt ~45° around
+      the long axis, supports as you like — they won't reach into the hinge gaps.
+    </div>
+  </section>
+
+  <div id="warnings"></div>
+
+  <section class="group reveal" style="animation-delay:.26s">
+    <div class="group-title"><span class="num">04</span> Data sheet</div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <div class="dl reveal" style="animation-delay:.3s">
+    <button class="btn" id="dlBox"><span>Download STL — box</span><span class="arr">↓</span></button>
+    <button class="btn alt" id="dlLid" style="display:none"><span>Download STL — lid</span><span class="arr">↓</span></button>
+  </div>
+
+  <footer class="reveal" style="animation-delay:.34s">
+    UNITS: MM · FORMAT: BINARY STL · WORKS OFFLINE
+  </footer>
+</aside>
+
+<main class="reveal">
+  <canvas id="view"></canvas>
+  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+  <div class="hud tl">PREVIEW · <b>drag</b> to rotate · scroll to zoom</div>
+  <div class="hud br">OUTER SIZE<div class="dims" id="hudDims"></div></div>
+</main>
+
+<script>
+"use strict";
+
+/* ═══════════════ geometry ═══════════════ */
+
+const SEG = 10; // segments per rounded corner
+
+// Rounded-rectangle outline, counterclockwise (seen from +Z).
+// Always 4*(SEG+1) points so outer and inner outlines stitch 1:1.
+function outline(hx, hy, r) {
+  r = Math.max(0, Math.min(r, Math.min(hx, hy) - 1e-4));
+  const pts = [];
+  const corners = [
+    [ hx - r,   hy - r,    0],
+    [-(hx - r), hy - r,   90],
+    [-(hx - r), -(hy - r), 180],
+    [ hx - r,   -(hy - r), 270],
+  ];
+  for (const [cx, cy, a0] of corners) {
+    for (let i = 0; i <= SEG; i++) {
+      const a = (a0 + 90 * i / SEG) * Math.PI / 180;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  }
+  return pts;
+}
+
+// Open tub with a sloped rim: wall height runs linearly from hF (front,
+// y=−W/2) to hB (back, y=+W/2). A regular box is the special case hF = hB.
+function buildTub(L, W, hF, hB, wall, bottom, R) {
+  const outer = outline(L / 2, W / 2, R);
+  const inner = outline(L / 2 - wall, W / 2 - wall, Math.max(R - wall, 0));
+  const n = outer.length, T = [];
+  const h = p => hF + (p[1] + W / 2) / W * (hB - hF);
+  const v = (p, z) => [p[0], p[1], z];
+  const quad = (a, b, c, d) => { T.push([a, b, c], [a, c, d]); };
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    quad(v(outer[i], 0), v(outer[j], 0), v(outer[j], h(outer[j])), v(outer[i], h(outer[i])));           // outer wall
+    quad(v(outer[i], h(outer[i])), v(outer[j], h(outer[j])), v(inner[j], h(inner[j])), v(inner[i], h(inner[i]))); // rim
+    quad(v(inner[j], bottom), v(inner[i], bottom), v(inner[i], h(inner[i])), v(inner[j], h(inner[j]))); // inner wall
+    T.push([[0, 0, bottom], v(inner[i], bottom), v(inner[j], bottom)]);              // cavity floor
+    T.push([[0, 0, 0], v(outer[j], 0), v(outer[i], 0)]);                             // underside
+  }
+  return T;
+}
+
+function buildBox(L, W, H, wall, bottom, R) {
+  return buildTub(L, W, H, H, wall, bottom, R);
+}
+
+// Inset lid: plate L×W×lidT + a fitting lip that drops inside with clearance.
+// The lip is a hollow frame one wall thick; tiny boxes fall back to solid.
+// Prints as-is: plate on the bed, lip up.
+function buildLid(L, W, wall, R, clr, lipH, lidT) {
+  const A = outline(L / 2, W / 2, R);
+  const i1 = wall + clr;
+  const B = outline(L / 2 - i1, W / 2 - i1, Math.max(R - i1, 0));
+  const i2 = i1 + wall;
+  const hollow = L / 2 - i2 > 0.5 && W / 2 - i2 > 0.5;
+  const C = hollow ? outline(L / 2 - i2, W / 2 - i2, Math.max(R - i2, 0)) : null;
+  const n = A.length, T = [];
+  const z1 = lidT, z2 = lidT + lipH;
+  const v = (p, z) => [p[0], p[1], z];
+  const quad = (a, b, c, d) => { T.push([a, b, c], [a, c, d]); };
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    T.push([[0, 0, 0], v(A[j], 0), v(A[i], 0)]);                   // plate underside
+    quad(v(A[i], 0), v(A[j], 0), v(A[j], z1), v(A[i], z1));        // plate edge
+    quad(v(A[i], z1), v(A[j], z1), v(B[j], z1), v(B[i], z1));      // step to the lip
+    quad(v(B[i], z1), v(B[j], z1), v(B[j], z2), v(B[i], z2));      // lip outer wall
+    if (hollow) {
+      quad(v(B[i], z2), v(B[j], z2), v(C[j], z2), v(C[i], z2));    // lip top face
+      quad(v(C[j], z1), v(C[i], z1), v(C[i], z2), v(C[j], z2));    // lip inner wall
+      T.push([[0, 0, z1], v(C[i], z1), v(C[j], z1)]);              // plateau inside the lip
+    } else {
+      T.push([[0, 0, z2], v(B[i], z2), v(B[j], z2)]);              // solid lip: top
+    }
+  }
+  // Friction ridges on the lip's long sides: they reach 0.15 mm past the
+  // nominal clearance and hold the lid with a light press fit
+  const ry = W/2 - i1, rr = clr + 0.3;
+  const xr = L/2 - i1 - Math.max(R - i1, 0) - 0.5;
+  if (xr > 2 && lipH > 2*rr + 0.8) {
+    const zc = z1 + lipH/2;
+    T.push(...halfRoundRidgeX(-xr, xr, ry - 0.15, zc, rr, 1));
+    T.push(...halfRoundRidgeX(-xr, xr, -(ry - 0.15), zc, rr, -1));
+  }
+  return T;
+}
+
+/* ── primitives for composite parts (welded by overlap in the slicer) ── */
+
+function cuboid(x0, x1, y0, y1, z0, z1) {
+  const p = [[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]];
+  const F = [[0,3,2,1],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[3,0,4,7]];
+  const T = [];
+  for (const [a,b,c,d] of F) T.push([p[a],p[b],p[c]], [p[a],p[c],p[d]]);
+  return T;
+}
+
+// prism along X: convex profile in (y,z), counterclockwise
+function prismX(prof, x0, x1) {
+  const n = prof.length, T = [];
+  let cy = 0, cz = 0;
+  for (const p of prof) { cy += p[0]; cz += p[1]; }
+  cy /= n; cz /= n;
+  const v = (p, x) => [x, p[0], p[1]];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    T.push([v(prof[i],x0), v(prof[j],x0), v(prof[j],x1)], [v(prof[i],x0), v(prof[j],x1), v(prof[i],x1)]);
+    T.push([[x1,cy,cz], v(prof[i],x1), v(prof[j],x1)]);
+    T.push([[x0,cy,cz], v(prof[j],x0), v(prof[i],x0)]);
+  }
+  return T;
+}
+
+// solid cylinder along X: hinge discs and pins
+function cylX(x0, x1, cy, cz, r, res) {
+  const T = [];
+  const P = (k, x) => {
+    const a = 2 * Math.PI * k / res;
+    return [x, cy + r * Math.cos(a), cz + r * Math.sin(a)];
+  };
+  for (let k = 0; k < res; k++) {
+    const k2 = (k + 1) % res;
+    T.push([P(k,x0), P(k2,x0), P(k2,x1)], [P(k,x0), P(k2,x1), P(k,x1)]);
+    T.push([[x1,cy,cz], P(k,x1), P(k2,x1)]);
+    T.push([[x0,cy,cz], P(k2,x0), P(k,x0)]);
+  }
+  return T;
+}
+
+// ring (tube) along X: hinge knuckle with a pin channel
+function tubeX(x0, x1, cy, cz, ro, ri, res) {
+  const T = [];
+  const P = (r, k, x) => {
+    const a = 2 * Math.PI * k / res;
+    return [x, cy + r * Math.cos(a), cz + r * Math.sin(a)];
+  };
+  const quad = (a, b, c, d) => T.push([a, b, c], [a, c, d]);
+  for (let k = 0; k < res; k++) {
+    const k2 = (k + 1) % res;
+    quad(P(ro,k,x0), P(ro,k2,x0), P(ro,k2,x1), P(ro,k,x1)); // outer surface
+    quad(P(ri,k2,x0), P(ri,k,x0), P(ri,k,x1), P(ri,k2,x1)); // channel
+    quad(P(ro,k,x1), P(ro,k2,x1), P(ri,k2,x1), P(ri,k,x1)); // +X end cap
+    quad(P(ro,k2,x0), P(ro,k,x0), P(ri,k,x0), P(ri,k2,x0)); // −X end cap
+  }
+  return T;
+}
+
+/* ── cap lid: the same tub, worn over the box from above ── */
+function buildLidCap(L, W, wall, R, clr, skirt, lidT) {
+  const o = wall + clr;
+  const T = buildBox(L + 2*o, W + 2*o, lidT + skirt, wall, lidT, R + o);
+  // Friction ridges on the inside of the skirt: they reach 0.15 mm past the
+  // nominal clearance and grip the box walls
+  const ry = W/2 + clr, rr = clr + 0.3;
+  const xr = L/2 - R - 1;
+  if (xr > 2 && skirt > 2*rr + 0.8) {
+    const zc = lidT + skirt/2;
+    T.push(...halfRoundRidgeX(-xr, xr, ry + 0.15, zc, rr, -1));
+    T.push(...halfRoundRidgeX(-xr, xr, -(ry + 0.15), zc, rr, 1));
+  }
+  return T;
+}
+
+/* ── hinge + swinging latch, printed in place (assembled, closed) ──
+   A plain straight box, a flat lid hinged along the top back edge, and a
+   swinging latch flap on its own mini-hinge at the front: the flap hangs
+   on a lug in the front wall and locks the lid (flip it up to open).
+   Both hinges are captive: the pins are grown through the knuckles with
+   0.45 mm radial clearance. The part is exported assembled; pick your own
+   print orientation (e.g. tilted 45° around the long axis, supports as
+   you like — they cannot reach into the hinge gaps). */
+const PH = {
+  rk: 3.2, rp: 1.5, hole: 1.95, aclr: 0.4, // main hinge
+  mrk: 2.0, mrp: 1.2, mhole: 1.65,         // latch flap mini-hinge
+  lidGap: 0.3,                             // lid floats this far above the rim
+};
+
+function hingeLayout(L, W, H, R, lidT) {
+  const rimTop = H - lidT - PH.lidGap;     // top of the box walls
+  const ya = W/2 + PH.rk + 0.3;            // axis behind the wall: discs clear it
+  const za = rimTop - 2.3;
+  const HL = Math.min(L - 2 * Math.max(R, 2) - 4, 70);
+  const kw = HL / 5, x0 = -HL / 2;
+  const seg = i => [x0 + i * kw, x0 + (i + 1) * kw];
+  const lidSegs = [seg(0), seg(2), seg(4)];
+  const boxSegs = [seg(1), seg(3)].map(([a, b]) => [a + PH.aclr, b - PH.aclr]);
+  return { rimTop, ya, za, HL, x0, lidSegs, boxSegs };
+}
+
+// solid rounded-corner plate (the lid)
+function plate(L, W, R, th) {
+  const A = outline(L/2, W/2, R);
+  const n = A.length, T = [];
+  const v = (p, z) => [p[0], p[1], z];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    T.push([[0,0,0], v(A[j],0), v(A[i],0)]);
+    T.push([[0,0,th], v(A[i],th), v(A[j],th)]);
+    T.push([v(A[i],0), v(A[j],0), v(A[j],th)], [v(A[i],0), v(A[j],th), v(A[i],th)]);
+  }
+  return T;
+}
+
+function halfRoundRidgeX(x0, x1, cy, cz, r, dir) {
+  // half-round ridge along X, bulging dir = ±1 in Y
+  const prof = [];
+  for (let k = 0; k <= 10; k++) {
+    const a = (90 + 180 * k / 10) * Math.PI / 180;
+    prof.push([cy - dir * r * Math.cos(a), cz + r * Math.sin(a)]);
+  }
+  if (dir > 0) prof.reverse(); // keep the outline counterclockwise
+  return prismX(prof, x0, x1);
+}
+
+// Box with a hinged lid and a latch flap, one assembled piece.
+function buildHinged(L, W, H, wall, bottom, R, lidT) {
+  const g = hingeLayout(L, W, H, R, lidT);
+  const T = [];
+  const bite = Math.min(0.8, wall * 0.5);
+  const zP = H - lidT; // underside of the lid plate
+
+  /* box */
+  T.push(...buildBox(L, W, g.rimTop, wall, bottom, R));
+  for (const [a, b] of g.boxSegs) {
+    T.push(...tubeX(a, b, g.ya, g.za, PH.rk, PH.hole, 20));   // hinge knuckle ring
+    // wall ↔ ring web, kept 0.45 below the pin channel
+    T.push(...cuboid(a, b, W/2 - bite, g.ya - 0.5, g.za - 3.2, g.za - 2.4));
+  }
+  // latch lug on the front wall (passes through the flap window)
+  T.push(...cuboid(-4.5, 4.5, -W/2 - 4.2, -W/2 + 0.6, g.rimTop - 7, g.rimTop - 4.8));
+
+  /* lid: plate above the rim + hinge discs on hanger straps */
+  T.push(...plate(L, W, R, lidT).map(t => t.map(p => [p[0], p[1], p[2] + zP])));
+  for (const [a, b] of g.lidSegs) {
+    T.push(...cylX(a, b, g.ya, g.za, PH.rk, 20));             // disc, fused with the pin
+    T.push(...cuboid(a, b, W/2 - 2, g.ya - 0.9, zP, H));      // bridge from the plate
+    T.push(...cuboid(a, b, W/2 + 0.3, g.ya - 0.9, g.za - 1.5, H)); // strap down to the disc
+  }
+  T.push(...cylX(g.x0, g.x0 + g.HL, g.ya, g.za, PH.rp, 20));  // main hinge pin
+
+  /* latch flap on a mini-hinge under the lid's front visor */
+  const ym = -W/2 - 2.4, zm = zP - 1.0;
+  const yF0 = -W/2 - 3.6, yF1 = -W/2 - 2.4;
+  T.push(...cuboid(-8, 8, -W/2 - 3.4, -W/2 + 2, zP, H));      // visor
+  T.push(...tubeX(-2.5, 2.5, ym, zm, PH.mrk, PH.mhole, 16));  // visor ring
+  T.push(...cylX(-8, -2.9, ym, zm, PH.mrk, 16));              // flap trunnions
+  T.push(...cylX(2.9, 8, ym, zm, PH.mrk, 16));
+  T.push(...cylX(-8, 8, ym, zm, PH.mrp, 16));                 // mini-hinge pin
+  T.push(...cuboid(-8, 8, yF0, yF1, g.rimTop - 4.4, zm + 0.7));        // flap top
+  T.push(...cuboid(-8, -5, yF0, yF1, g.rimTop - 9.4, g.rimTop - 4.4)); // side strap
+  T.push(...cuboid(5, 8, yF0, yF1, g.rimTop - 9.4, g.rimTop - 4.4));   // side strap
+  T.push(...cuboid(-8, 8, yF0, yF1, g.rimTop - 9.4, g.rimTop - 7.4));  // bottom bar
+  return T;
+}
+
+function triNormal(t) {
+  const [a, b, c] = t;
+  const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+  const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+  const nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+  const len = Math.hypot(nx, ny, nz);
+  return len < 1e-9 ? null : [nx/len, ny/len, nz/len];
+}
+
+// drop degenerate triangles (collapsed arcs when the corner radius is 0)
+function clean(tris) { return tris.filter(t => triNormal(t)); }
+
+function meshVolume(tris) { // mm³, by the divergence theorem
+  let v6 = 0;
+  for (const [a, b, c] of tris) {
+    v6 += a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0]) + a[2]*(b[0]*c[1]-b[1]*c[0]);
+  }
+  return v6 / 6;
+}
+
+function toSTL(tris, name) {
+  const buf = new ArrayBuffer(84 + tris.length * 50);
+  const dv = new DataView(buf);
+  const hdr = "Binary STL - " + name;
+  for (let i = 0; i < Math.min(79, hdr.length); i++) dv.setUint8(i, hdr.charCodeAt(i) & 0xff);
+  dv.setUint32(80, tris.length, true);
+  let o = 84;
+  for (const t of tris) {
+    const nrm = triNormal(t);
+    for (const c of nrm) { dv.setFloat32(o, c, true); o += 4; }
+    for (const p of t) for (const c of p) { dv.setFloat32(o, c, true); o += 4; }
+    dv.setUint16(o, 0, true); o += 2;
+  }
+  return buf;
+}
+
+/* ═══════════════ state and rebuild ═══════════════ */
+
+const $ = id => document.getElementById(id);
+let mode = "outer";
+let lidType = "none"; // none | inset | cap | hinge
+let model = null;     // { boxTris, lidTris, L, W, H, raw, ok }
+
+function val(id) { return parseFloat($(id).value.replace(",", ".")); }
+
+function rebuild() {
+  const raw = {
+    len: val("len"), wid: val("wid"), hgt: val("hgt"),
+    wall: val("wall"), bottom: val("bot"), rad: val("rad"),
+    clr: val("clr"), lip: val("lip"), skirt: val("skirt"), lidT: val("lidT"),
+  };
+  if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
+
+  // with the hinge, the lid and its gap are part of the overall height
+  const lidVsp = lidType === "hinge" ? raw.lidT + PH.lidGap : 0;
+  let L, W, H, R;
+  if (mode === "outer") { L = raw.len; W = raw.wid; H = raw.hgt; R = raw.rad; }
+  else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; H = raw.hgt + raw.bottom + lidVsp; R = raw.rad + raw.wall; }
+
+  const warnings = [];
+  if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1)
+    warnings.push("The walls eat the entire volume: at least 1 mm must remain inside.");
+  if (H - raw.bottom < 1)
+    warnings.push("The floor almost reaches the full height: the cavity is under 1 mm.");
+  if (lidType === "inset" && (L/2 - raw.wall - raw.clr < 0.5 || W/2 - raw.wall - raw.clr < 0.5))
+    warnings.push("The lid clearance is too large — no room left for the lip.");
+  if (lidType === "inset" && raw.lip > H - raw.bottom)
+    warnings.push("The lid lip is deeper than the box cavity.");
+  if (lidType === "cap" && raw.skirt > H - 1)
+    warnings.push("The cap skirt is longer than the box walls.");
+  if (lidType === "hinge") {
+    if (L - 2*Math.max(R, 2) - 4 < 25)
+      warnings.push("The box is too short for the hinge: needs ≥ " + (29 + 2*Math.max(R, 2)).toFixed(0) + " mm in length.");
+    if (L - 2*R < 20) warnings.push("Not enough straight run at the front for the latch flap (needs ≥ 20 mm).");
+    if (H < 16) warnings.push("The hinge and latch need an overall height of 16 mm or more.");
+    if (raw.wall < 0.8) warnings.push("The hinge needs walls of at least 0.8 mm — thinner knuckle webs won't hold.");
+  }
+
+  const ok = warnings.length === 0;
+  let boxTris = [], lidTris = [];
+  if (ok) {
+    boxTris = clean(lidType === "hinge"
+      ? buildHinged(L, W, H, raw.wall, raw.bottom, R, raw.lidT)
+      : buildBox(L, W, H, raw.wall, raw.bottom, R));
+    if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT));
+    if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT));
+  }
+  model = { boxTris, lidTris, L, W, H, raw, ok };
+
+  // warnings
+  const wEl = $("warnings");
+  wEl.innerHTML = warnings.map(w => `<div class="w">${w}</div>`).join("");
+  wEl.classList.toggle("show", warnings.length > 0);
+
+  // data sheet
+  const fmt = (x, d = 1) => x.toLocaleString("en-US", { maximumFractionDigits: d });
+  let statsHtml = "";
+  if (ok) {
+    const volBox = meshVolume(boxTris) / 1000; // cm³
+    const li = L - 2*raw.wall, wi = W - 2*raw.wall;
+    const ri = Math.max(0, Math.min(R - raw.wall, Math.min(li, wi)/2));
+    const innerH = H - raw.bottom - lidVsp;
+    const capacity = (li*wi - (4 - Math.PI)*ri*ri) * innerH / 1000; // ml
+    const boxName = lidType === "hinge" ? "plastic, part" : "plastic, box";
+    const rows = [
+      ["outer size", `${fmt(L)}×${fmt(W)}×${fmt(H)} <i>mm</i>`],
+      ["inside", `${fmt(li)}×${fmt(wi)}×${fmt(innerH)} <i>mm</i>`],
+      ["capacity", `≈ ${fmt(capacity, 0)} <i>ml</i>`],
+      [boxName, `${fmt(volBox)} <i>cm³</i> · ${fmt(volBox*1.24)} <i>g PLA</i>`],
+    ];
+    if (lidTris.length) {
+      const volLid = meshVolume(lidTris) / 1000;
+      const name = lidType === "cap" ? "plastic, cap" : "plastic, lid";
+      rows.push([name, `${fmt(volLid)} <i>cm³</i> · ${fmt(volLid*1.24)} <i>g PLA</i>`]);
+    }
+    rows.push(["triangles", fmt(boxTris.length + lidTris.length, 0)]);
+    statsHtml = rows.map(([k, v]) =>
+      `<div class="row"><span>${k}</span><span class="dots"></span><b>${v}</b></div>`).join("");
+  } else {
+    statsHtml = `<div class="row"><span style="color:var(--err)">fix the parameters above</span></div>`;
+  }
+  $("stats").innerHTML = statsHtml;
+
+  $("hudDims").textContent = ok ? `${fmt(L)} × ${fmt(W)} × ${fmt(H)} mm` : "—";
+  $("dlBox").disabled = !ok;
+  $("dlLid").disabled = !ok;
+
+  prepareScene();
+}
+
+/* ═══════════════ downloads ═══════════════ */
+
+function download(buf, name) {
+  const blob = new Blob([buf], { type: "model/stl" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const dimTag = () => `${Math.round(model.L)}x${Math.round(model.W)}x${Math.round(model.H)}`;
+$("dlBox").addEventListener("click", () => {
+  if (!model?.ok) return;
+  const name = lidType === "hinge" ? "box_hinged" : "box";
+  download(toSTL(model.boxTris, name), `${name}_${dimTag()}.stl`);
+});
+$("dlLid").addEventListener("click", () => {
+  if (!model?.ok || !model.lidTris.length) return;
+  const name = { inset: "lid", cap: "cap" }[lidType];
+  download(toSTL(model.lidTris, name), `${name}_${dimTag()}.stl`);
+});
+
+/* ═══════════════ preview (software render) ═══════════════ */
+
+const canvas = $("view");
+const ctx = canvas.getContext("2d");
+let yaw = -0.65, pitch = 0.42, zoom = 1;
+let spinning = true;          // gentle rotation until the first touch
+let scene = [];               // [{tris, hue, sat}]
+let sceneR = 100;             // scene radius for auto-fit
+let sceneH = 40;              // scene height for darkening lower faces
+
+function prepareScene() {
+  scene = [];
+  if (!model?.ok) { sceneR = 100; return; }
+  const solids = [{ tris: model.boxTris, hue: 28, sat: 7 }];
+  if (model.lidTris.length) solids.push({ tris: model.lidTris, hue: 186, sat: 12 });
+  const xr = tris => {
+    let lo = 1e9, hi = -1e9;
+    for (const t of tris) for (const p of t) { lo = Math.min(lo, p[0]); hi = Math.max(hi, p[0]); }
+    return [lo, hi];
+  };
+  // the lid sits to the right of the box; the scene centers on the overall X extent
+  const [b0, b1] = xr(solids[0].tris);
+  const offs = [0];
+  let hi = b1;
+  if (solids[1]) {
+    const [l0, l1] = xr(solids[1].tris);
+    const dx = b1 + Math.max(12, (b1 - b0) * 0.12) - l0;
+    offs.push(dx);
+    hi = l1 + dx;
+  }
+  const cx = (b0 + hi) / 2;
+  let maxR = 0, maxZ = 1;
+  solids.forEach((s, k) => {
+    const tris = s.tris.map(t => t.map(p => [p[0] + offs[k] - cx, p[1], p[2]]));
+    for (const t of tris) for (const p of t) {
+      maxR = Math.max(maxR, Math.hypot(p[0], p[1], p[2]));
+      maxZ = Math.max(maxZ, p[2]);
+    }
+    scene.push({ ...s, tris });
+  });
+  sceneR = maxR || 100;
+  sceneH = maxZ;
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const { clientWidth: w, clientHeight: h } = canvas;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+new ResizeObserver(resize).observe(canvas);
+
+function project(p, sy, cy2, sp, cp) {
+  // rotate around Z (yaw), then around X (pitch); camera looks along −Y
+  const x1 = p[0]*cy2 - p[1]*sy, y1 = p[0]*sy + p[1]*cy2, z1 = p[2];
+  return [x1, y1*cp - z1*sp, y1*sp + z1*cp]; // [screen X, depth, screen Y-up]
+}
+
+function render() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w) { requestAnimationFrame(render); return; }
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cyc = h / 2 + h * 0.04;
+  const scale = Math.min(w, h) * 0.42 / sceneR * zoom;
+  const sy = Math.sin(yaw), cy2 = Math.cos(yaw);
+  const sp = Math.sin(pitch), cp = Math.cos(pitch);
+  const P = p => project(p, sy, cy2, sp, cp);
+
+  // build-plate grid (10 mm pitch)
+  const ext = Math.ceil(sceneR * 1.25 / 10) * 10;
+  ctx.lineWidth = 1;
+  for (let g = -ext; g <= ext; g += 10) {
+    ctx.strokeStyle = g === 0 ? "rgba(89,209,200,.22)" : "rgba(139,147,160,.10)";
+    let a = P([g, -ext, 0]), b = P([g, ext, 0]);
+    ctx.beginPath();
+    ctx.moveTo(cx + a[0]*scale, cyc - a[2]*scale);
+    ctx.lineTo(cx + b[0]*scale, cyc - b[2]*scale);
+    ctx.stroke();
+    a = P([-ext, g, 0]); b = P([ext, g, 0]);
+    ctx.beginPath();
+    ctx.moveTo(cx + a[0]*scale, cyc - a[2]*scale);
+    ctx.lineTo(cx + b[0]*scale, cyc - b[2]*scale);
+    ctx.stroke();
+  }
+
+  // triangles: backface culling, shading, depth sort
+  const light = [0.35, -0.8, 0.5]; // in camera space
+  const lLen = Math.hypot(...light);
+  const draw = [];
+  for (const s of scene) {
+    for (const t of s.tris) {
+      const a = P(t[0]), b = P(t[1]), c = P(t[2]);
+      // projected normal: (b-a)×(c-a)
+      const ux = b[0]-a[0], uy = b[1]-a[1], uz = b[2]-a[2];
+      const vx = c[0]-a[0], vy = c[1]-a[1], vz = c[2]-a[2];
+      const nx = uy*vz - uz*vy, ny = uz*vx - ux*vz, nz = ux*vy - uy*vx;
+      if (ny >= 0) continue; // facing away (camera sits at −Y depth)
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      const lam = Math.max(0, -(nx*light[0] + ny*light[1] + nz*light[2]) / (nl*lLen));
+      const depth = (a[1] + b[1] + c[1]) / 3;
+      // height-based darkening — cheap AO so the cavity reads well
+      const zc = (t[0][2] + t[1][2] + t[2][2]) / (3 * sceneH);
+      const lit = (16 + lam * 46) * (0.66 + 0.34 * Math.min(1, zc));
+      draw.push([depth, a, b, c, `hsl(${s.hue} ${s.sat}% ${lit.toFixed(1)}%)`]);
+    }
+  }
+  draw.sort((p, q) => q[0] - p[0]); // farthest first
+  for (const [, a, b, c, col] of draw) {
+    ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = .8;
+    ctx.beginPath();
+    ctx.moveTo(cx + a[0]*scale, cyc - a[2]*scale);
+    ctx.lineTo(cx + b[0]*scale, cyc - b[2]*scale);
+    ctx.lineTo(cx + c[0]*scale, cyc - c[2]*scale);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+
+  // axis triad in the corner
+  const ox = 54, oy = h - 46, al = 26;
+  const axes = [[[1,0,0],"#ff8a00","X"], [[0,1,0],"#59d1c8","Y"], [[0,0,1],"#e8e4da","Z"]];
+  ctx.font = "10px " + getComputedStyle(document.body).getPropertyValue("--font-mono");
+  for (const [ax, col, name] of axes) {
+    const p = P(ax);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = .8;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + p[0]*al, oy - p[2]*al); ctx.stroke();
+    ctx.fillText(name, ox + p[0]*al*1.35 - 3, oy - p[2]*al*1.35 + 3);
+    ctx.globalAlpha = 1;
+  }
+
+  if (spinning) yaw += 0.0035;
+  requestAnimationFrame(render);
+}
+
+/* ═══════════════ controls ═══════════════ */
+
+let dragging = false, px = 0, py = 0;
+canvas.addEventListener("pointerdown", e => {
+  dragging = true; spinning = false;
+  px = e.clientX; py = e.clientY;
+  canvas.classList.add("grabbing");
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  yaw += (e.clientX - px) * 0.008;
+  pitch = Math.min(1.45, Math.max(-0.2, pitch + (e.clientY - py) * 0.008));
+  px = e.clientX; py = e.clientY;
+});
+canvas.addEventListener("pointerup", () => { dragging = false; canvas.classList.remove("grabbing"); });
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  zoom = Math.min(6, Math.max(0.25, zoom * (e.deltaY > 0 ? 0.92 : 1.09)));
+}, { passive: false });
+
+// steppers: −/+ buttons and keyboard input
+document.querySelectorAll(".stepper").forEach(st => {
+  const inp = st.querySelector("input");
+  const [minus, plus] = st.querySelectorAll("button");
+  const step = parseFloat(inp.dataset.step), min = parseFloat(inp.dataset.min);
+  const nudge = dir => {
+    const cur = parseFloat(inp.value.replace(",", ".")) || 0;
+    const next = Math.max(min, Math.round((cur + dir * step) * 100) / 100);
+    inp.value = next;
+    rebuild();
+  };
+  minus.addEventListener("click", () => nudge(-1));
+  plus.addEventListener("click", () => nudge(1));
+  inp.addEventListener("input", rebuild);
+  inp.addEventListener("focus", () => inp.select());
+  inp.addEventListener("blur", () => { // normalize after manual typing
+    const cur = parseFloat(inp.value.replace(",", "."));
+    inp.value = isFinite(cur) ? Math.max(min, cur) : min;
+    rebuild();
+  });
+});
+
+// dimension mode switch
+$("modeSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.mode === mode) return;
+    mode = btn.dataset.mode;
+    $("modeSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    rebuild();
+  });
+});
+
+// lid type: which fields are visible for each option
+const LID_FIELDS = {
+  none:  [],
+  inset: ["fClr", "fLip", "fLidT"],
+  cap:   ["fClr", "fSkirt", "fLidT"],
+  hinge: ["fLidT", "hingeNote"],
+};
+$("lidSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    lidType = btn.dataset.lid;
+    $("lidSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    for (const ids of Object.values(LID_FIELDS)) for (const id of ids) $(id).style.display = "none";
+    for (const id of LID_FIELDS[lidType]) $(id).style.display = "";
+    $("dlLid").style.display = (lidType === "none" || lidType === "hinge") ? "none" : "";
+    $("dlLid").querySelector("span").textContent =
+      lidType === "cap" ? "Download STL — cap" : "Download STL — lid";
+    $("dlBox").querySelector("span").textContent =
+      lidType === "hinge" ? "Download STL — box + lid" : "Download STL — box";
+    rebuild();
+  });
+});
+
+resize();
+rebuild();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
