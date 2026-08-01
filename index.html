@@ -108,6 +108,13 @@
   .seg.quad button + button { border-left: 0; }
   .seg.quad button:nth-child(even) { border-left: 1px solid var(--line); }
   .seg.quad button:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .seg.quad button:last-child:nth-child(odd) { grid-column: 1 / -1; border-left: 0; }
+  .seg.tri { grid-template-columns: 1fr 1fr 1fr; }
+  .seg-label {
+    font-size: 11px; color: var(--muted); letter-spacing: .08em;
+    text-transform: uppercase; font-family: var(--font-mono);
+    margin: 10px 0 6px;
+  }
   .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; padding: 6px 0 2px; }
   .hint b { color: var(--cyan); font-weight: 500; }
 
@@ -282,7 +289,22 @@
       <button data-lid="none" class="on">None</button>
       <button data-lid="inset">Inset</button>
       <button data-lid="cap">Cap</button>
-      <button data-lid="hinge">Hinge + latch</button>
+      <button data-lid="hinge">Hinged</button>
+      <button data-lid="slide">Sliding</button>
+    </div>
+    <div id="hingeOpts" style="display:none">
+      <div class="seg-label">Hinge</div>
+      <div class="seg tri" id="hingeSeg">
+        <button data-hinge="pip" class="on">In place</button>
+        <button data-hinge="pin">Filament pin</button>
+        <button data-hinge="snap">Snap-on</button>
+      </div>
+      <div class="seg-label">Latch</div>
+      <div class="seg tri" id="latchSeg">
+        <button data-latch="flap" class="on">Flap</button>
+        <button data-latch="tongue">Tongue</button>
+        <button data-latch="none">None</button>
+      </div>
     </div>
     <div class="field" id="fClr" style="display:none">
       <label>Fit clearance <small>per side</small></label>
@@ -294,9 +316,14 @@
       <div class="stepper" data-for="lip"><button>−</button><input id="lip" value="6" data-step="0.5" data-min="1"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
+    <div class="field" id="fTor" style="display:none">
+      <label>Lid body height <small>above the seam</small></label>
+      <div class="stepper" data-for="tor"><button>−</button><input id="tor" value="0" data-step="0.5" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
     <div class="field" id="fSkirt" style="display:none">
-      <label>Skirt height <small>overlap onto the walls</small></label>
-      <div class="stepper" data-for="skirt"><button>−</button><input id="skirt" value="8" data-step="0.5" data-min="1"><button>+</button></div>
+      <label>Lid skirt height <small>apron over the walls</small></label>
+      <div class="stepper" data-for="skirt"><button>−</button><input id="skirt" value="0" data-step="0.5" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
     <div class="field" id="fLidT" style="display:none">
@@ -305,19 +332,39 @@
       <span class="unit">mm</span>
     </div>
     <div class="hint" id="hingeNote" style="display:none">
-      Prints as <b>a single pre-assembled piece</b>, closed: a flat lid hinged along
-      the top back edge, plus a swinging latch flap on its own mini-hinge at the
-      front, hanging on a lug in the wall (to open the box, flip the flap up).
-      The pins are grown inside the hinges with 0.45 mm clearance — the first
-      turn breaks them free. Print orientation is up to you: tilt ~45° around
-      the long axis, supports as you like — they won't reach into the hinge gaps.
+      <b>In place</b>: one pre-assembled closed piece; the pins are grown inside
+      the hinges with 0.45 mm clearance — the first turn breaks them free; print
+      in any orientation (e.g. tilted ~45°). <b>Filament pin</b>: box and lid
+      print separately and flat; push 1.75 mm filament through the ⌀2.1 channel
+      and melt the ends. <b>Snap-on</b>: the lid clips onto rods once (hold it
+      upright at ~90° and press straight down) and only comes off deliberately.
+      The flap latch swings on a grown mini-hinge over a wall lug; the tongue
+      latch clicks over a rib on the front wall.
+    </div>
+    <div class="hint" id="slideNote" style="display:none">
+      The lid slides into side slots from one end; friction bumps hold it shut
+      and a grip bar helps pull it open. Both parts print flat, no supports.
+    </div>
+  </section>
+
+  <section class="group reveal" style="animation-delay:.23s">
+    <div class="group-title"><span class="num">04</span> Dividers</div>
+    <div class="field">
+      <label>Zones along length <small>X axis</small></label>
+      <div class="stepper" data-for="zx"><button>−</button><input id="zx" value="1" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">×</span>
+    </div>
+    <div class="field">
+      <label>Zones along width <small>Y axis</small></label>
+      <div class="stepper" data-for="zy"><button>−</button><input id="zy" value="1" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">×</span>
     </div>
   </section>
 
   <div id="warnings"></div>
 
   <section class="group reveal" style="animation-delay:.26s">
-    <div class="group-title"><span class="num">04</span> Data sheet</div>
+    <div class="group-title"><span class="num">05</span> Data sheet</div>
     <div class="stats" id="stats"></div>
   </section>
 
@@ -389,44 +436,52 @@ function buildBox(L, W, H, wall, bottom, R) {
   return buildTub(L, W, H, H, wall, bottom, R);
 }
 
-// Inset lid: plate L×W×lidT + a fitting lip that drops inside with clearance.
-// The lip is a hollow frame one wall thick; tiny boxes fall back to solid.
-// Prints as-is: plate on the bed, lip up.
-function buildLid(L, W, wall, R, clr, lipH, lidT) {
-  const A = outline(L / 2, W / 2, R);
-  const i1 = wall + clr;
-  const B = outline(L / 2 - i1, W / 2 - i1, Math.max(R - i1, 0));
-  const i2 = i1 + wall;
-  const hollow = L / 2 - i2 > 0.5 && W / 2 - i2 > 0.5;
-  const C = hollow ? outline(L / 2 - i2, W / 2 - i2, Math.max(R - i2, 0)) : null;
-  const n = A.length, T = [];
-  const z1 = lidT, z2 = lidT + lipH;
-  const v = (p, z) => [p[0], p[1], z];
-  const quad = (a, b, c, d) => { T.push([a, b, c], [a, c, d]); };
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    T.push([[0, 0, 0], v(A[j], 0), v(A[i], 0)]);                   // plate underside
-    quad(v(A[i], 0), v(A[j], 0), v(A[j], z1), v(A[i], z1));        // plate edge
-    quad(v(A[i], z1), v(A[j], z1), v(B[j], z1), v(B[i], z1));      // step to the lip
-    quad(v(B[i], z1), v(B[j], z1), v(B[j], z2), v(B[i], z2));      // lip outer wall
-    if (hollow) {
-      quad(v(B[i], z2), v(B[j], z2), v(C[j], z2), v(C[i], z2));    // lip top face
-      quad(v(C[j], z1), v(C[i], z1), v(C[i], z2), v(C[j], z2));    // lip inner wall
-      T.push([[0, 0, z1], v(C[i], z1), v(C[j], z1)]);              // plateau inside the lip
+// Generalized lid shell in print orientation (roof plate on the bed).
+// tor — body height above the seam; skirt — apron hanging outside the box
+// below the seam; lipH — inner lip below the seam (inset fit). Any may be 0.
+// Skirted lids use an enlarged outline so the box rim tucks inside.
+function buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
+  const T = [];
+  const off = skirt > 0 ? wall + clr : 0;
+  const Lo = L + 2*off, Wo = W + 2*off, Ro = R + off;
+  T.push(...plate(Lo, Wo, Ro, lidT));                       // roof
+  const bodyH = tor + skirt;
+  if (bodyH > 0.05)                                         // torso + skirt band, sunk into the roof
+    T.push(...wallBand(Lo, Wo, Ro, wall, lidT - 0.4, lidT + bodyH));
+  if (lipH > 0) {                                           // inner lip
+    const i1 = wall + clr, i2 = i1 + wall;
+    const zTip = lidT + tor + lipH;
+    if (L/2 - i2 > 0.5 && W/2 - i2 > 0.5) {
+      // hollow frame, sunk 0.4 into the roof for a solid weld
+      T.push(...wallBand(L - 2*i1, W - 2*i1, Math.max(R - i1, 0), wall, lidT - 0.4, zTip));
     } else {
-      T.push([[0, 0, z2], v(B[i], z2), v(B[j], z2)]);              // solid lip: top
+      // tiny box: solid lip column
+      T.push(...plate(L - 2*i1, W - 2*i1, Math.max(R - i1, 0), tor + lipH + 0.4)
+        .map(t => t.map(p => [p[0], p[1], p[2] + lidT - 0.4])));
+    }
+    // friction ridges on the lip's long sides: they reach 0.15 mm past the
+    // nominal clearance and hold the lid with a light press fit
+    const ry = W/2 - i1, rr = clr + 0.3;
+    const xr = L/2 - i1 - Math.max(R - i1, 0) - 0.5;
+    if (xr > 2 && lipH > 2*rr + 0.8) {
+      const zc = lidT + tor + lipH/2;
+      T.push(...halfRoundRidgeX(-xr, xr, ry - 0.15, zc, rr, 1));
+      T.push(...halfRoundRidgeX(-xr, xr, -(ry - 0.15), zc, rr, -1));
     }
   }
-  // Friction ridges on the lip's long sides: they reach 0.15 mm past the
-  // nominal clearance and hold the lid with a light press fit
-  const ry = W/2 - i1, rr = clr + 0.3;
-  const xr = L/2 - i1 - Math.max(R - i1, 0) - 0.5;
-  if (xr > 2 && lipH > 2*rr + 0.8) {
-    const zc = z1 + lipH/2;
-    T.push(...halfRoundRidgeX(-xr, xr, ry - 0.15, zc, rr, 1));
-    T.push(...halfRoundRidgeX(-xr, xr, -(ry - 0.15), zc, rr, -1));
+  if (skirt > 0) {                                          // skirt grip ridges
+    const rr = clr + 0.3, xr = L/2 - R - 1;
+    if (xr > 2 && skirt > 2*rr + 0.8) {
+      const ry = W/2 + clr, zc = lidT + tor + skirt/2;
+      T.push(...halfRoundRidgeX(-xr, xr, ry + 0.15, zc, rr, -1));
+      T.push(...halfRoundRidgeX(-xr, xr, -(ry + 0.15), zc, rr, 1));
+    }
   }
   return T;
+}
+
+function buildLid(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
+  return buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt);
 }
 
 /* ── primitives for composite parts (welded by overlap in the slicer) ── */
@@ -489,46 +544,195 @@ function tubeX(x0, x1, cy, cz, ro, ri, res) {
   return T;
 }
 
-/* ── cap lid: the same tub, worn over the box from above ── */
-function buildLidCap(L, W, wall, R, clr, skirt, lidT) {
-  const o = wall + clr;
-  const T = buildBox(L + 2*o, W + 2*o, lidT + skirt, wall, lidT, R + o);
-  // Friction ridges on the inside of the skirt: they reach 0.15 mm past the
-  // nominal clearance and grip the box walls
-  const ry = W/2 + clr, rr = clr + 0.3;
-  const xr = L/2 - R - 1;
-  if (xr > 2 && skirt > 2*rr + 0.8) {
-    const zc = lidT + skirt/2;
-    T.push(...halfRoundRidgeX(-xr, xr, ry + 0.15, zc, rr, -1));
-    T.push(...halfRoundRidgeX(-xr, xr, -(ry + 0.15), zc, rr, 1));
+// closed rectangular wall band (a rim ring of thickness t between z0..z1)
+function wallBand(L, W, R, t, z0, z1) {
+  const A = outline(L/2, W/2, R);
+  const B = outline(L/2 - t, W/2 - t, Math.max(R - t, 0));
+  const n = A.length, T = [];
+  const v = (p, z) => [p[0], p[1], z];
+  const quad = (a, b, c, d) => T.push([a, b, c], [a, c, d]);
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    quad(v(A[i],z0), v(A[j],z0), v(A[j],z1), v(A[i],z1)); // outer
+    quad(v(B[j],z0), v(B[i],z0), v(B[i],z1), v(B[j],z1)); // inner
+    quad(v(A[j],z0), v(A[i],z0), v(B[i],z0), v(B[j],z0)); // bottom ring
+    quad(v(A[i],z1), v(A[j],z1), v(B[j],z1), v(B[i],z1)); // top ring
   }
   return T;
 }
 
-/* ── hinge + swinging latch, printed in place (assembled, closed) ──
-   A plain straight box, a flat lid hinged along the top back edge, and a
-   swinging latch flap on its own mini-hinge at the front: the flap hangs
-   on a lug in the front wall and locks the lid (flip it up to open).
-   Both hinges are captive: the pins are grown through the knuckles with
-   0.45 mm radial clearance. The part is exported assembled; pick your own
-   print orientation (e.g. tilted 45° around the long axis, supports as
-   you like — they cannot reach into the hinge gaps). */
+// arc tube (C-profile) along X: the snap-on hinge clip
+function arcTubeX(x0, x1, cy, cz, ro, ri, a0, a1, segs) {
+  const T = [];
+  const P = (r, k, x) => {
+    const a = a0 + (a1 - a0) * k / segs;
+    return [x, cy + r * Math.cos(a), cz + r * Math.sin(a)];
+  };
+  const quad = (a, b, c, d) => T.push([a, b, c], [a, c, d]);
+  for (let k = 0; k < segs; k++) {
+    quad(P(ro,k,x0), P(ro,k+1,x0), P(ro,k+1,x1), P(ro,k,x1)); // outer arc
+    quad(P(ri,k+1,x0), P(ri,k,x0), P(ri,k,x1), P(ri,k+1,x1)); // inner arc
+    quad(P(ro,k,x1), P(ro,k+1,x1), P(ri,k+1,x1), P(ri,k,x1)); // +X cap
+    quad(P(ro,k+1,x0), P(ro,k,x0), P(ri,k,x0), P(ri,k+1,x0)); // −X cap
+  }
+  quad(P(ri,0,x0), P(ro,0,x0), P(ro,0,x1), P(ri,0,x1));             // jaw face at a0
+  quad(P(ro,segs,x0), P(ri,segs,x0), P(ri,segs,x1), P(ro,segs,x1)); // jaw face at a1
+  return T;
+}
+
+// vertical annulus sector (rounded wall corner segment for the slide lid)
+function arcWallZ(cx, cy, ro, ri, a0, a1, z0, z1, segs) {
+  const T = [];
+  const P = (r, k, z) => {
+    const a = a0 + (a1 - a0) * k / segs;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a), z];
+  };
+  const quad = (a, b, c, d) => T.push([a, b, c], [a, c, d]);
+  for (let k = 0; k < segs; k++) {
+    quad(P(ro,k,z0), P(ro,k+1,z0), P(ro,k+1,z1), P(ro,k,z1)); // outer
+    quad(P(ri,k+1,z0), P(ri,k,z0), P(ri,k,z1), P(ri,k+1,z1)); // inner
+    quad(P(ro,k+1,z0), P(ro,k,z0), P(ri,k,z0), P(ri,k+1,z0)); // bottom
+    quad(P(ro,k,z1), P(ro,k+1,z1), P(ri,k+1,z1), P(ri,k,z1)); // top
+  }
+  quad(P(ri,0,z0), P(ro,0,z0), P(ro,0,z1), P(ri,0,z1));             // end face at a0
+  quad(P(ro,segs,z0), P(ri,segs,z0), P(ri,segs,z1), P(ro,segs,z1)); // end face at a1
+  return T;
+}
+
+/* ── cap lid: shell with a skirt worn over the box from above ── */
+function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
+  return buildLidShell(L, W, wall, R, clr, 0, lidT, tor, skirt);
+}
+
+/* ── dividers: split the cavity into zones ── */
+function buildDividers(L, W, wall, bottom, nx, ny, topZ) {
+  const T = [];
+  const ix = L/2 - wall, iy = W/2 - wall;
+  const dt = Math.min(wall, 1.6);
+  for (let k = 1; k < nx; k++) {
+    const x = -ix + 2*ix*k/nx;
+    T.push(...cuboid(x - dt/2, x + dt/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topZ));
+  }
+  for (let k = 1; k < ny; k++) {
+    const y = -iy + 2*iy*k/ny;
+    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dt/2, y + dt/2, bottom - 0.4, topZ));
+  }
+  return T;
+}
+
+/* ── sliding lid (pencil-box style) ──
+   The lid slides along X into side slots: the walls above the slot floor
+   keep their thickness, and short rails overhang the slot from above along
+   both sides and the far end. The entry-end wall stops at the slot floor so
+   the lid slides in over it. Friction bumps near the entry edge hold it. */
+const SL = { railT: 1.8, g: 1.8 };
+
+function slideLayout(H, lidT, clr) {
+  return { h1: H - SL.railT - lidT - 2*clr }; // slot floor
+}
+
+function buildSlideBox(L, W, H, wall, bottom, R, lidT, clr) {
+  const g = slideLayout(H, lidT, clr);
+  const T = buildBox(L, W, g.h1, wall, bottom, R);
+  const xs0 = -L/2 + Math.max(R, 0.01), xs1 = L/2 - Math.max(R, 0.01);
+  // side walls above the slot floor
+  T.push(...cuboid(xs0, xs1, W/2 - wall, W/2, g.h1, H));
+  T.push(...cuboid(xs0, xs1, -W/2, -W/2 + wall, g.h1, H));
+  // far end wall + rounded far corners
+  T.push(...cuboid(L/2 - wall, L/2, -(W/2 - R), W/2 - R, g.h1, H));
+  if (R > 0.05) {
+    const ri = Math.max(R - wall, 0.01);
+    T.push(...arcWallZ(L/2 - R,  W/2 - R, R, ri, 0, Math.PI/2, g.h1, H, 8));
+    T.push(...arcWallZ(L/2 - R, -(W/2 - R), R, ri, -Math.PI/2, 0, g.h1, H, 8));
+  }
+  // overhanging rails that trap the lid in the slot
+  T.push(...cuboid(xs0, xs1, W/2 - wall - SL.g, W/2 - wall + 0.3, H - SL.railT, H));
+  T.push(...cuboid(xs0, xs1, -(W/2 - wall) - 0.3, -(W/2 - wall) + SL.g, H - SL.railT, H));
+  T.push(...cuboid(L/2 - wall - SL.g, L/2 - wall + 0.3, -(W/2 - R), W/2 - R, H - SL.railT, H));
+  return T;
+}
+
+// Slide lid: plate with rounded far corners, a grip bar on top near the
+// entry edge, and side friction bumps. Prints top face up.
+function buildSlideLid(L, W, wall, R, lidT, clr) {
+  const wL = W - 2*wall - 2*clr;
+  const x0 = -L/2, x1 = L/2 - wall - clr;
+  const rc = Math.min(Math.max(R - wall, 0.01), wL/2 - 0.5);
+  const pts = [[x0, -wL/2], [x1 - rc, -wL/2]];
+  for (let k = 1; k <= 6; k++) { // far bottom corner, −90°→0°
+    const a = (-90 + 90*k/6) * Math.PI / 180;
+    pts.push([x1 - rc + rc*Math.cos(a), -wL/2 + rc + rc*Math.sin(a)]);
+  }
+  for (let k = 1; k <= 6; k++) { // far top corner, 0°→90°
+    const a = 90*k/6 * Math.PI / 180;
+    pts.push([x1 - rc + rc*Math.cos(a), wL/2 - rc + rc*Math.sin(a)]);
+  }
+  pts.push([x0, wL/2]);
+  // extrude the convex outline (fan from centroid, like plate())
+  const T = [];
+  let cx = 0, cy = 0;
+  for (const p of pts) { cx += p[0]; cy += p[1]; }
+  cx /= pts.length; cy /= pts.length;
+  const v = (p, z) => [p[0], p[1], z];
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    T.push([[cx, cy, 0], v(pts[j], 0), v(pts[i], 0)]);
+    T.push([[cx, cy, lidT], v(pts[i], lidT), v(pts[j], lidT)]);
+    T.push([v(pts[i], 0), v(pts[j], 0), v(pts[j], lidT)], [v(pts[i], 0), v(pts[j], lidT), v(pts[i], lidT)]);
+  }
+  // grip bar near the entry edge
+  T.push(...cuboid(x0 + 1.5, x0 + 4.5, -wL/2 + 3, wL/2 - 3, lidT, lidT + 1.2));
+  // side friction bumps: 0.15 mm of press into the slot walls
+  const rr = Math.min(clr + 0.3, lidT/2 - 0.1);
+  if (rr > 0.25) {
+    T.push(...halfRoundRidgeX(x0 + 2, x0 + 8, wL/2 - 0.15, lidT/2, rr, 1));
+    T.push(...halfRoundRidgeX(x0 + 2, x0 + 8, -(wL/2 - 0.15), lidT/2, rr, -1));
+  }
+  return T;
+}
+
+/* ── hinged lid: a plain box, a lid (with optional body height) hinged
+   along the top back edge, plus a choice of hinge and latch mechanisms.
+   Hinge kinds:
+     pip  — printed in place, assembled and closed: the pin is grown
+            through the knuckles with 0.45 mm radial clearance;
+     pin  — box and lid print separately and flat; knuckles carry a ⌀2.1
+            channel for a piece of 1.75 mm filament as the pin;
+     snap — box carries rods between cheek plates, the lid carries C-clips
+            that snap on once (press down at ~90° open) and then rotate.
+   Latch kinds: flap (swinging hasp on a mini-hinge over a wall lug),
+   tongue (springy frame that clicks over a half-round rib), or none. */
 const PH = {
-  rk: 3.2, rp: 1.5, hole: 1.95, aclr: 0.4, // main hinge
+  rk: 3.2, rp: 1.5, holePip: 1.95, holePin: 1.05, aclr: 0.4,
   mrk: 2.0, mrp: 1.2, mhole: 1.65,         // latch flap mini-hinge
   lidGap: 0.3,                             // lid floats this far above the rim
 };
+const SN = { ro: 3.45, rod: 1.8, ri: 2.05, slot: 3.1, ay: 3.9, ws: 14, chk: 1.6 };
 
-function hingeLayout(L, W, H, R, lidT) {
-  const rimTop = H - lidT - PH.lidGap;     // top of the box walls
-  const ya = W/2 + PH.rk + 0.3;            // axis behind the wall: discs clear it
-  const za = rimTop - 2.3;
-  const HL = Math.min(L - 2 * Math.max(R, 2) - 4, 70);
-  const kw = HL / 5, x0 = -HL / 2;
-  const seg = i => [x0 + i * kw, x0 + (i + 1) * kw];
-  const lidSegs = [seg(0), seg(2), seg(4)];
-  const boxSegs = [seg(1), seg(3)].map(([a, b]) => [a + PH.aclr, b - PH.aclr]);
-  return { rimTop, ya, za, HL, x0, lidSegs, boxSegs };
+function hingeLayout(L, W, H, R, lidT, tor, kind) {
+  const seam = H - lidT - tor;             // lid underside plane
+  const rimTop = seam - PH.lidGap;         // top of the box walls
+  const ya = kind === "snap" ? W/2 + SN.ay : W/2 + PH.rk + 0.3;
+  const za = kind === "snap" ? H - SN.ro
+           : kind === "pin"  ? rimTop - 1.3   // clip rings print bed-tangent at tor=0
+           : rimTop - 2.3;                    // pip
+  const HL = Math.min(L - 2 * Math.max(R, 2) - 4, kind === "snap" ? 90 : 70);
+  const x0 = -HL / 2;
+  let lidSegs, boxSegs;
+  if (kind === "snap") {
+    const c = HL / 2 - SN.ws / 2 - SN.chk;
+    const centers = HL >= 40 ? [-c, c] : [0];
+    lidSegs = centers.map(cc => [cc - SN.ws/2 + 0.4, cc + SN.ws/2 - 0.4]);
+    boxSegs = centers.map(cc => [cc - SN.ws/2, cc + SN.ws/2]); // rod spans
+  } else {
+    const kw = HL / 5;
+    const seg = i => [x0 + i * kw, x0 + (i + 1) * kw];
+    lidSegs = [seg(0), seg(2), seg(4)];
+    boxSegs = [seg(1), seg(3)].map(([a, b]) => [a + PH.aclr, b - PH.aclr]);
+  }
+  const hDrop = Math.max(2, Math.min(5, rimTop - 4));
+  const ribLen = Math.max(6, Math.min(22, L * 0.25));
+  return { seam, rimTop, ya, za, q: H - za, HL, x0, lidSegs, boxSegs, hDrop, ribLen };
 }
 
 // solid rounded-corner plate (the lid)
@@ -556,44 +760,105 @@ function halfRoundRidgeX(x0, x1, cy, cz, r, dir) {
   return prismX(prof, x0, x1);
 }
 
-// Box with a hinged lid and a latch flap, one assembled piece.
-function buildHinged(L, W, H, wall, bottom, R, lidT) {
-  const g = hingeLayout(L, W, H, R, lidT);
+// Swinging latch flap under the lid's front visor — in lid-local print
+// coordinates (roof on the bed, flap pointing up). q3 = lidT + tor + lidGap.
+function latchFlapLidLocal(W, lidT, tor) {
   const T = [];
-  const bite = Math.min(0.8, wall * 0.5);
-  const zP = H - lidT; // underside of the lid plate
-
-  /* box */
-  T.push(...buildBox(L, W, g.rimTop, wall, bottom, R));
-  for (const [a, b] of g.boxSegs) {
-    T.push(...tubeX(a, b, g.ya, g.za, PH.rk, PH.hole, 20));   // hinge knuckle ring
-    // wall ↔ ring web, kept 0.45 below the pin channel
-    T.push(...cuboid(a, b, W/2 - bite, g.ya - 0.5, g.za - 3.2, g.za - 2.4));
-  }
-  // latch lug on the front wall (passes through the flap window)
-  T.push(...cuboid(-4.5, 4.5, -W/2 - 4.2, -W/2 + 0.6, g.rimTop - 7, g.rimTop - 4.8));
-
-  /* lid: plate above the rim + hinge discs on hanger straps */
-  T.push(...plate(L, W, R, lidT).map(t => t.map(p => [p[0], p[1], p[2] + zP])));
-  for (const [a, b] of g.lidSegs) {
-    T.push(...cylX(a, b, g.ya, g.za, PH.rk, 20));             // disc, fused with the pin
-    T.push(...cuboid(a, b, W/2 - 2, g.ya - 0.9, zP, H));      // bridge from the plate
-    T.push(...cuboid(a, b, W/2 + 0.3, g.ya - 0.9, g.za - 1.5, H)); // strap down to the disc
-  }
-  T.push(...cylX(g.x0, g.x0 + g.HL, g.ya, g.za, PH.rp, 20));  // main hinge pin
-
-  /* latch flap on a mini-hinge under the lid's front visor */
-  const ym = -W/2 - 2.4, zm = zP - 1.0;
+  const q3 = lidT + tor + PH.lidGap;
+  const ym = -W/2 - 2.4, zm = lidT + 1.0;
   const yF0 = -W/2 - 3.6, yF1 = -W/2 - 2.4;
-  T.push(...cuboid(-8, 8, -W/2 - 3.4, -W/2 + 2, zP, H));      // visor
+  T.push(...cuboid(-8, 8, -W/2 - 3.4, -W/2 + 2, 0, lidT));    // visor
   T.push(...tubeX(-2.5, 2.5, ym, zm, PH.mrk, PH.mhole, 16));  // visor ring
   T.push(...cylX(-8, -2.9, ym, zm, PH.mrk, 16));              // flap trunnions
   T.push(...cylX(2.9, 8, ym, zm, PH.mrk, 16));
   T.push(...cylX(-8, 8, ym, zm, PH.mrp, 16));                 // mini-hinge pin
-  T.push(...cuboid(-8, 8, yF0, yF1, g.rimTop - 4.4, zm + 0.7));        // flap top
-  T.push(...cuboid(-8, -5, yF0, yF1, g.rimTop - 9.4, g.rimTop - 4.4)); // side strap
-  T.push(...cuboid(5, 8, yF0, yF1, g.rimTop - 9.4, g.rimTop - 4.4));   // side strap
-  T.push(...cuboid(-8, 8, yF0, yF1, g.rimTop - 9.4, g.rimTop - 7.4));  // bottom bar
+  T.push(...cuboid(-8, 8, yF0, yF1, lidT + 0.3, q3 + 4.4));   // flap top section
+  T.push(...cuboid(-8, -5, yF0, yF1, q3 + 4.4, q3 + 9.4));    // side strap
+  T.push(...cuboid(5, 8, yF0, yF1, q3 + 4.4, q3 + 9.4));      // side strap
+  T.push(...cuboid(-8, 8, yF0, yF1, q3 + 7.4, q3 + 9.4));     // end bar (hooks the lug)
+  return T;
+}
+
+// Springy tongue with a window — lid-local print coordinates, pointing up.
+function latchTongueLidLocal(g, W, lidT, tor) {
+  const T = [];
+  const q3 = lidT + tor + PH.lidGap;
+  const winW = g.ribLen + 1, sw = 3;
+  const yOut = -W/2 - 0.3 - 1.2, yIn = -W/2 - 0.3;
+  const p1 = q3 + g.hDrop - 1.05, w1 = q3 + g.hDrop + 1.05;
+  T.push(...cuboid(-winW/2 - sw, winW/2 + sw, yOut, -W/2 + 1.5, 0, lidT)); // base
+  T.push(...cuboid(-winW/2 - sw, winW/2 + sw, yOut, yIn, 0, p1));          // panel
+  T.push(...cuboid(-winW/2 - sw, -winW/2, yOut, yIn, 0, w1 + 1.5));        // post
+  T.push(...cuboid(winW/2, winW/2 + sw, yOut, yIn, 0, w1 + 1.5));          // post
+  T.push(...cuboid(-winW/2 - 2, winW/2 + 2, yOut, yIn, w1, w1 + 1.5));     // crossbar
+  return T;
+}
+
+// box-side latch feature: a lug (flap) or a half-round rib (tongue)
+function latchBox(latch, g, W) {
+  if (latch === "flap")
+    return cuboid(-4.5, 4.5, -W/2 - 4.2, -W/2 + 0.6, g.rimTop - 7, g.rimTop - 4.8);
+  if (latch === "tongue")
+    return halfRoundRidgeX(-g.ribLen/2, g.ribLen/2, -W/2 + 0.25, g.rimTop - g.hDrop, 0.8, -1);
+  return [];
+}
+
+function buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, kind, latch) {
+  const g = hingeLayout(L, W, H, R, lidT, tor, kind);
+  const T = buildBox(L, W, g.rimTop, wall, bottom, R);
+  const bite = Math.min(0.8, wall * 0.5);
+  if (kind === "snap") {
+    for (const [x0, x1] of g.boxSegs) {
+      for (const [ca, cb] of [[x0 - SN.chk, x0], [x1, x1 + SN.chk]]) {
+        T.push(...cuboid(ca, cb, W/2 - bite, g.ya + 1.5, 0, g.rimTop - 0.3)); // cheek
+        T.push(...cuboid(ca, cb, W/2 + 0.7, g.ya + 1.5, Math.max(1, g.za - 4), g.za + 1.9)); // head
+      }
+      T.push(...cylX(x0 - 1, x1 + 1, g.ya, g.za, SN.rod, 18)); // rod (prints as a bridge)
+    }
+  } else {
+    const hole = kind === "pip" ? PH.holePip : PH.holePin;
+    for (const [a, b] of g.boxSegs) {
+      T.push(...tubeX(a, b, g.ya, g.za, PH.rk, hole, 20));     // knuckle ring
+      // wall ↔ ring web, kept clear below the pin channel
+      T.push(...cuboid(a, b, W/2 - bite, g.ya - 0.5, g.za - 3.2, g.za - 2.4));
+    }
+  }
+  T.push(...latchBox(latch, g, W));
+  return T;
+}
+
+// Hinged lid in print orientation (roof on the bed, hardware pointing up).
+function buildHingedLidLocal(L, W, H, wall, R, lidT, tor, kind, latch) {
+  const g = hingeLayout(L, W, H, R, lidT, tor, kind);
+  const T = buildLidShell(L, W, wall, R, 0, 0, lidT, tor, 0);
+  if (kind === "snap") {
+    const half = Math.asin(SN.slot / 2 / SN.ri);
+    for (const [x0, x1] of g.lidSegs) {
+      // C-clip resting on the bed, slot facing +Y (away from the plate)
+      T.push(...arcTubeX(x0, x1, g.ya, SN.ro, SN.ro, SN.ri, half, 2*Math.PI - half, 18));
+      T.push(...cuboid(x0, x1, W/2 - 2, g.ya - 2.3, 0, lidT));   // arm to the plate
+      T.push(...cuboid(x0, x1, W/2 + 0.3, g.ya - 2.3, 0, SN.ro)); // riser: thick weld
+    }
+  } else {
+    for (const [a, b] of g.lidSegs) {
+      if (kind === "pip") T.push(...cylX(a, b, g.ya, g.q, PH.rk, 20));          // disc
+      else T.push(...tubeX(a, b, g.ya, g.q, PH.rk, PH.holePin, 20));            // ring
+      T.push(...cuboid(a, b, W/2 - 2, g.ya - 0.9, 0, lidT));                    // bridge
+      T.push(...cuboid(a, b, W/2 + 0.3, g.ya - 0.9, 0, g.q + 1.5));             // strap
+    }
+    if (kind === "pip") T.push(...cylX(g.x0, g.x0 + g.HL, g.ya, g.q, PH.rp, 20)); // grown pin
+  }
+  if (latch === "flap") T.push(...latchFlapLidLocal(W, lidT, tor));
+  if (latch === "tongue") T.push(...latchTongueLidLocal(g, W, lidT, tor));
+  return T;
+}
+
+// Print-in-place: one assembled piece — box + lid flipped into place
+// (rotate 180° about Y: the lid is x-symmetric, so [−x, y, H−z] is exact).
+function buildHingedPip(L, W, H, wall, bottom, R, lidT, tor, latch) {
+  const T = buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, "pip", latch);
+  const lid = buildHingedLidLocal(L, W, H, wall, R, lidT, tor, "pip", latch);
+  T.push(...lid.map(t => t.map(p => [-p[0], p[1], H - p[2]])));
   return T;
 }
 
@@ -637,8 +902,10 @@ function toSTL(tris, name) {
 
 const $ = id => document.getElementById(id);
 let mode = "outer";
-let lidType = "none"; // none | inset | cap | hinge
-let model = null;     // { boxTris, lidTris, L, W, H, raw, ok }
+let lidType = "none";    // none | inset | cap | hinge | slide
+let hingeKind = "pip";   // pip | pin | snap
+let latchKind = "flap";  // flap | tongue | none
+let model = null;        // { boxTris, lidTris, L, W, H, raw, ok }
 
 function val(id) { return parseFloat($(id).value.replace(",", ".")); }
 
@@ -646,15 +913,20 @@ function rebuild() {
   const raw = {
     len: val("len"), wid: val("wid"), hgt: val("hgt"),
     wall: val("wall"), bottom: val("bot"), rad: val("rad"),
-    clr: val("clr"), lip: val("lip"), skirt: val("skirt"), lidT: val("lidT"),
+    clr: val("clr"), lip: val("lip"), skirt: val("skirt"),
+    lidT: val("lidT"), tor: val("tor"), zx: val("zx"), zy: val("zy"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
-  // with the hinge, the lid and its gap are part of the overall height
-  const lidVsp = lidType === "hinge" ? raw.lidT + PH.lidGap : 0;
+  // hinged: lid body + gap are part of the overall height;
+  // sliding: the slot mechanism consumes height inside the box
+  const lidVsp = lidType === "hinge" ? raw.lidT + raw.tor + PH.lidGap
+               : lidType === "slide" ? SL.railT + raw.lidT + 2*raw.clr
+               : 0;
   let L, W, H, R;
   if (mode === "outer") { L = raw.len; W = raw.wid; H = raw.hgt; R = raw.rad; }
   else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; H = raw.hgt + raw.bottom + lidVsp; R = raw.rad + raw.wall; }
+  const nx = Math.max(1, Math.round(raw.zx)), ny = Math.max(1, Math.round(raw.zy));
 
   const warnings = [];
   if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1)
@@ -665,24 +937,57 @@ function rebuild() {
     warnings.push("The lid clearance is too large — no room left for the lip.");
   if (lidType === "inset" && raw.lip > H - raw.bottom)
     warnings.push("The lid lip is deeper than the box cavity.");
-  if (lidType === "cap" && raw.skirt > H - 1)
-    warnings.push("The cap skirt is longer than the box walls.");
-  if (lidType === "hinge") {
-    if (L - 2*Math.max(R, 2) - 4 < 25)
-      warnings.push("The box is too short for the hinge: needs ≥ " + (29 + 2*Math.max(R, 2)).toFixed(0) + " mm in length.");
-    if (L - 2*R < 20) warnings.push("Not enough straight run at the front for the latch flap (needs ≥ 20 mm).");
-    if (H < 16) warnings.push("The hinge and latch need an overall height of 16 mm or more.");
-    if (raw.wall < 0.8) warnings.push("The hinge needs walls of at least 0.8 mm — thinner knuckle webs won't hold.");
+  if (lidType === "cap") {
+    if (raw.skirt < 2) warnings.push("A cap needs a skirt of at least 2 mm to hold on.");
+    if (raw.skirt > H - 1) warnings.push("The cap skirt is longer than the box walls.");
   }
+  if (lidType === "hinge") {
+    const need = hingeKind === "snap" ? 18 : 25;
+    if (L - 2*Math.max(R, 2) - 4 < need)
+      warnings.push("The box is too short for the hinge: needs ≥ " + (need + 4 + 2*Math.max(R, 2)).toFixed(0) + " mm in length.");
+    if (latchKind === "flap" && L - 2*R < 20)
+      warnings.push("Not enough straight run at the front for the latch flap (needs ≥ 20 mm).");
+    if (H - raw.lidT - raw.tor - PH.lidGap < 12)
+      warnings.push("Too shallow for the hinge and latch: increase the height or reduce the lid body.");
+    if (raw.wall < 0.8) warnings.push("The hinge needs walls of at least 0.8 mm — thinner knuckle webs won't hold.");
+    if (hingeKind === "snap" && raw.lidT + raw.tor > 6.5)
+      warnings.push("The snap-on hinge needs the lid body no taller than " + (6.5 - raw.lidT).toFixed(1) + " mm.");
+  }
+  if (lidType === "slide") {
+    if (H - SL.railT - raw.lidT - 2*raw.clr < raw.bottom + 3)
+      warnings.push("Too shallow for the sliding lid: the slot leaves under 3 mm of cavity.");
+    if (W - 2*raw.wall - 2*raw.clr < 8)
+      warnings.push("Too narrow for the sliding lid (needs ≥ 8 mm of inner width).");
+    if (L < 30) warnings.push("The sliding lid needs a length of 30 mm or more.");
+  }
+  if ((nx > 1 && (L - 2*raw.wall) / nx < 4) || (ny > 1 && (W - 2*raw.wall) / ny < 4))
+    warnings.push("Divider zones come out smaller than 4 mm — reduce the zone count.");
 
   const ok = warnings.length === 0;
   let boxTris = [], lidTris = [];
   if (ok) {
-    boxTris = clean(lidType === "hinge"
-      ? buildHinged(L, W, H, raw.wall, raw.bottom, R, raw.lidT)
-      : buildBox(L, W, H, raw.wall, raw.bottom, R));
-    if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT));
-    if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT));
+    let base, divTop = H;
+    if (lidType === "hinge") {
+      const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, hingeKind);
+      divTop = g.rimTop;
+      if (hingeKind === "pip") {
+        base = buildHingedPip(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, latchKind);
+      } else {
+        base = buildHingedBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, hingeKind, latchKind);
+        lidTris = clean(buildHingedLidLocal(L, W, H, raw.wall, R, raw.lidT, raw.tor, hingeKind, latchKind));
+      }
+    } else if (lidType === "slide") {
+      divTop = slideLayout(H, raw.lidT, raw.clr).h1 - 0.2;
+      base = buildSlideBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.clr);
+      lidTris = clean(buildSlideLid(L, W, raw.wall, R, raw.lidT, raw.clr));
+    } else {
+      if (lidType === "inset") divTop = H - raw.lip - 0.3;
+      base = buildBox(L, W, H, raw.wall, raw.bottom, R);
+      if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT, raw.tor, raw.skirt));
+      if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT, raw.tor));
+    }
+    if (nx > 1 || ny > 1) base.push(...buildDividers(L, W, raw.wall, raw.bottom, nx, ny, divTop));
+    boxTris = clean(base);
   }
   model = { boxTris, lidTris, L, W, H, raw, ok };
 
@@ -700,17 +1005,22 @@ function rebuild() {
     const ri = Math.max(0, Math.min(R - raw.wall, Math.min(li, wi)/2));
     const innerH = H - raw.bottom - lidVsp;
     const capacity = (li*wi - (4 - Math.PI)*ri*ri) * innerH / 1000; // ml
-    const boxName = lidType === "hinge" ? "plastic, part" : "plastic, box";
+    const boxName = lidType === "hinge" && hingeKind === "pip" ? "plastic, part" : "plastic, box";
     const rows = [
       ["outer size", `${fmt(L)}×${fmt(W)}×${fmt(H)} <i>mm</i>`],
       ["inside", `${fmt(li)}×${fmt(wi)}×${fmt(innerH)} <i>mm</i>`],
       ["capacity", `≈ ${fmt(capacity, 0)} <i>ml</i>`],
       [boxName, `${fmt(volBox)} <i>cm³</i> · ${fmt(volBox*1.24)} <i>g PLA</i>`],
     ];
+    if (nx * ny > 1) rows.splice(2, 0, ["zones", `${nx} × ${ny}`]);
     if (lidTris.length) {
       const volLid = meshVolume(lidTris) / 1000;
       const name = lidType === "cap" ? "plastic, cap" : "plastic, lid";
       rows.push([name, `${fmt(volLid)} <i>cm³</i> · ${fmt(volLid*1.24)} <i>g PLA</i>`]);
+    }
+    if (lidType === "hinge" && hingeKind === "pin") {
+      const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, "pin");
+      rows.push(["hinge pin", `⌀1.75 filament × ${Math.ceil(g.HL + 4)} <i>mm</i>`]);
     }
     rows.push(["triangles", fmt(boxTris.length + lidTris.length, 0)]);
     statsHtml = rows.map(([k, v]) =>
@@ -740,12 +1050,12 @@ function download(buf, name) {
 const dimTag = () => `${Math.round(model.L)}x${Math.round(model.W)}x${Math.round(model.H)}`;
 $("dlBox").addEventListener("click", () => {
   if (!model?.ok) return;
-  const name = lidType === "hinge" ? "box_hinged" : "box";
+  const name = lidType === "hinge" ? "box_hinged" : lidType === "slide" ? "box_slide" : "box";
   download(toSTL(model.boxTris, name), `${name}_${dimTag()}.stl`);
 });
 $("dlLid").addEventListener("click", () => {
   if (!model?.ok || !model.lidTris.length) return;
-  const name = { inset: "lid", cap: "cap" }[lidType];
+  const name = { inset: "lid", cap: "cap", slide: "lid_slide", hinge: "lid_hinged" }[lidType];
   download(toSTL(model.lidTris, name), `${name}_${dimTag()}.stl`);
 });
 
@@ -938,21 +1248,45 @@ $("modeSeg").querySelectorAll("button").forEach(btn => {
 // lid type: which fields are visible for each option
 const LID_FIELDS = {
   none:  [],
-  inset: ["fClr", "fLip", "fLidT"],
-  cap:   ["fClr", "fSkirt", "fLidT"],
-  hinge: ["fLidT", "hingeNote"],
+  inset: ["fClr", "fLip", "fTor", "fSkirt", "fLidT"],
+  cap:   ["fClr", "fTor", "fSkirt", "fLidT"],
+  hinge: ["hingeOpts", "fTor", "fLidT", "hingeNote"],
+  slide: ["fClr", "fLidT", "slideNote"],
 };
+const ALL_LID_IDS = [...new Set(Object.values(LID_FIELDS).flat())];
+
+function syncLidUI() {
+  for (const id of ALL_LID_IDS) $(id).style.display = "none";
+  for (const id of LID_FIELDS[lidType]) $(id).style.display = "";
+  const single = lidType === "none" || (lidType === "hinge" && hingeKind === "pip");
+  $("dlLid").style.display = single ? "none" : "";
+  $("dlLid").querySelector("span").textContent =
+    lidType === "cap" ? "Download STL — cap" : "Download STL — lid";
+  $("dlBox").querySelector("span").textContent =
+    lidType === "hinge" && hingeKind === "pip" ? "Download STL — box + lid" : "Download STL — box";
+}
+
 $("lidSeg").querySelectorAll("button").forEach(btn => {
   btn.addEventListener("click", () => {
     lidType = btn.dataset.lid;
     $("lidSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
-    for (const ids of Object.values(LID_FIELDS)) for (const id of ids) $(id).style.display = "none";
-    for (const id of LID_FIELDS[lidType]) $(id).style.display = "";
-    $("dlLid").style.display = (lidType === "none" || lidType === "hinge") ? "none" : "";
-    $("dlLid").querySelector("span").textContent =
-      lidType === "cap" ? "Download STL — cap" : "Download STL — lid";
-    $("dlBox").querySelector("span").textContent =
-      lidType === "hinge" ? "Download STL — box + lid" : "Download STL — box";
+    if (lidType === "cap" && val("skirt") < 2) $("skirt").value = 8; // a cap needs its skirt
+    syncLidUI();
+    rebuild();
+  });
+});
+$("hingeSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    hingeKind = btn.dataset.hinge;
+    $("hingeSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    syncLidUI();
+    rebuild();
+  });
+});
+$("latchSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    latchKind = btn.dataset.latch;
+    $("latchSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
     rebuild();
   });
 });

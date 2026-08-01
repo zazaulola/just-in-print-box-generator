@@ -11,19 +11,28 @@ JavaScript.
 
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness, corner radius (0 = sharp corners).
-- **Four lid options:**
+- **Dividers** — split the cavity into zones along both axes; divider height
+  adapts to the chosen lid (below the inset lip, below the sliding slot, etc.).
+- **Five lid options:**
   - **None** — an open tray.
-  - **Inset** — a flat lid with a hollow lip that drops inside the box.
-    Friction ridges on the lip reach 0.15 mm past the nominal clearance, so the
-    lid holds with a light press fit at any clearance setting.
+  - **Inset** — a lid with a hollow lip that drops inside the box. Friction
+    ridges on the lip reach 0.15 mm past the nominal clearance, so the lid
+    holds with a light press fit at any clearance setting.
   - **Cap** — a lid that slides over the outside of the box, with the same
     friction ridges on the inside of its skirt.
-  - **Hinge + latch** — a print-in-place design exported as one pre-assembled
-    piece: a flat lid hinged along the top back edge, plus a swinging latch
-    flap on its own mini-hinge at the front that hangs on a lug in the wall and
-    locks the lid (flip it up to open). The hinge pins are grown inside the
-    knuckles with 0.45 mm radial clearance — the first turn breaks them free.
-    No screws, no pins, no assembly.
+  - **Hinged** — a lid hinged along the top back edge, with a choice of
+    hinge mechanism: *in place* (one pre-assembled closed piece, the pin grown
+    inside the knuckles with 0.45 mm clearance — the first turn breaks it
+    free), *filament pin* (parts print separately and flat; a piece of
+    1.75 mm filament through a ⌀2.1 channel is the pin), or *snap-on* (the
+    lid's C-clips press onto rods once and then rotate). Plus a choice of
+    latch: a *swinging flap* on its own grown mini-hinge that hangs on a wall
+    lug, a *springy tongue* that clicks over a rib, or none.
+  - **Sliding** — a pencil-box lid that slides into side slots from one end,
+    held shut by friction bumps, with a grip bar on top.
+- **Lid body & skirt** — inset, cap, and hinged lids accept a body height
+  (raised sides above the seam) and, for inset/cap, a skirt height (an apron
+  hanging over the walls).
 - **Live 3D preview** — a small software renderer on `<canvas>` (drag to
   rotate, scroll to zoom), with a build-plate grid and an axis triad.
 - **Data sheet** — inner dimensions, capacity in ml, plastic volume and
@@ -40,12 +49,15 @@ deeper than the cavity, a box too short for the hinge, and so on).
 
 ### Printing notes
 
-- Inset and cap lids print flat as-is, no supports.
-- The hinged box is exported assembled and closed. Pick your own print
-  orientation — e.g. tilted ~45° around the long axis with supports where you
-  like them; the working clearances (0.45 mm radial in the hinges, 0.4 mm
-  axial, 0.3 mm between lid and rim) are too narrow for supports to intrude.
-  Consider a support blocker over the hinge area if your slicer is aggressive.
+- Inset, cap, and sliding lids print flat as-is, no supports.
+- The *in place* hinged box is exported assembled and closed. Pick your own
+  print orientation — e.g. tilted ~45° around the long axis with supports
+  where you like them; the working clearances (0.45 mm radial in the hinges,
+  0.4 mm axial, 0.3 mm between lid and rim) are too narrow for supports to
+  intrude. Consider a support blocker over the hinge area if your slicer is
+  aggressive.
+- The *filament pin* and *snap-on* hinged variants export two parts that both
+  print flat; the filament variant's data sheet lists the pin length to cut.
 - Friction fits assume typical FDM accuracy. If your printer runs tight or
   loose, tune the *Fit clearance* parameter — the ridges keep a constant
   0.15 mm engagement on top of it.
