@@ -20,6 +20,9 @@ JavaScript.
 - **Metric or imperial** — work in millimeters or inches (capacity in ml or
   fl oz, plastic in cm³/g or in³/oz); the geometry and the exported STL are
   always in millimeters, as slicers expect.
+- **Shareable links & history** — every setting lands in the URL hash, so a
+  link reproduces the exact setup (including the unit system), and the
+  browser's back/forward buttons walk through your parameter changes.
 - **Five lid options:**
   - **None** — an open tray.
   - **Inset** — a lid with a hollow lip that drops inside the box. Friction

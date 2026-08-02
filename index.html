@@ -1138,6 +1138,7 @@ function rebuild() {
   $("dlLid").disabled = !ok;
 
   prepareScene();
+  scheduleHashUpdate();
 }
 
 /* ═══════════════ downloads ═══════════════ */
@@ -1401,6 +1402,79 @@ function syncLidUI() {
     lidType === "hinge" && hingeKind === "pip" ? "Download STL — box + lid" : "Download STL — box";
 }
 
+/* ═══════════════ shareable links & history ═══════════════
+   Every parameter change lands in the URL hash (debounced, one history
+   entry per pause), so links reproduce the exact setup and the browser's
+   back/forward buttons walk the parameter history. */
+
+const INPUT_IDS = ["len","wid","hgt","wall","bot","rad","clr","lip","skirt","tor","lidT",
+                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty"];
+const DEF = {
+  unit: "mm", mode: "outer", lid: "none", hinge: "pip", latch: "flap",
+  inputs: Object.fromEntries(INPUT_IDS.map(id => [id, $(id).value])),
+};
+
+// an input's default rendered in the active display unit
+function defVal(id) {
+  const d = DEF.inputs[id];
+  if (unit === "mm" || d === "" || $(id).dataset.int) return d;
+  const v = parseFloat(d);
+  return isFinite(v) ? String(+(v / IN).toFixed(4)) : d;
+}
+
+function stateQS() { // only values that differ from the defaults
+  const p = new URLSearchParams();
+  if (unit !== DEF.unit) p.set("u", unit);
+  if (mode !== DEF.mode) p.set("m", mode);
+  if (lidType !== DEF.lid) p.set("lid", lidType);
+  if (lidType === "hinge") {
+    if (hingeKind !== DEF.hinge) p.set("h", hingeKind);
+    if (latchKind !== DEF.latch) p.set("lt", latchKind);
+  }
+  for (const id of INPUT_IDS) if ($(id).value !== defVal(id)) p.set(id, $(id).value);
+  return p.toString();
+}
+
+let hashTimer = 0, fromHistory = false;
+function scheduleHashUpdate() {
+  const skip = fromHistory; fromHistory = false;
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(() => {
+    if (skip) return; // history navigation must not spawn new entries
+    const qs = stateQS();
+    if (qs === location.hash.slice(1)) return;
+    history.pushState(null, "", qs ? "#" + qs : location.pathname + location.search);
+  }, 400);
+}
+
+const setSeg = (segId, attr, value) =>
+  $(segId).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset[attr] === value));
+
+function applyState(qs) {
+  const p = new URLSearchParams(qs);
+  const get = (k, d) => p.has(k) ? p.get(k) : d;
+  unit = get("u", DEF.unit) === "in" ? "in" : "mm";
+  mode = get("m", DEF.mode);
+  lidType = get("lid", DEF.lid);
+  hingeKind = get("h", DEF.hinge);
+  latchKind = get("lt", DEF.latch);
+  for (const id of INPUT_IDS) $(id).value = p.has(id) ? p.get(id) : defVal(id);
+  setSeg("unitSeg", "unit", unit);
+  setSeg("modeSeg", "mode", mode);
+  setSeg("lidSeg", "lid", lidType);
+  setSeg("hingeSeg", "hinge", hingeKind);
+  setSeg("latchSeg", "latch", latchKind);
+  document.querySelectorAll(".unit").forEach(u => {
+    if (u.textContent === "mm" || u.textContent === "in") u.textContent = unit;
+  });
+  syncLidUI();
+  rebuild();
+}
+window.addEventListener("popstate", () => {
+  fromHistory = true;
+  applyState(location.hash.slice(1));
+});
+
 $("lidSeg").querySelectorAll("button").forEach(btn => {
   btn.addEventListener("click", () => {
     lidType = btn.dataset.lid;
@@ -1427,7 +1501,8 @@ $("latchSeg").querySelectorAll("button").forEach(btn => {
 });
 
 resize();
-rebuild();
+if (location.hash.length > 1) { fromHistory = true; applyState(location.hash.slice(1)); }
+else rebuild();
 requestAnimationFrame(render);
 </script>
 </body>
