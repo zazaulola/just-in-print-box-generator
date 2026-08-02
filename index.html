@@ -115,6 +115,16 @@
     text-transform: uppercase; font-family: var(--font-mono);
     margin: 10px 0 6px;
   }
+  .field.col { display: block; }
+  .field .txt {
+    width: 100%; margin-top: 4px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 7px 9px;
+    color: var(--text); font-family: var(--font-mono); font-size: 12.5px;
+    outline: none;
+  }
+  .field .txt:focus { border-color: var(--accent-dim); color: var(--accent); }
+  .field .txt::placeholder { color: var(--muted); opacity: .6; }
   .hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; padding: 6px 0 2px; }
   .hint b { color: var(--cyan); font-weight: 500; }
 
@@ -349,15 +359,35 @@
 
   <section class="group reveal" style="animation-delay:.23s">
     <div class="group-title"><span class="num">04</span> Dividers</div>
+    <div class="seg-label">Crosswise — split the length</div>
     <div class="field">
-      <label>Zones along length <small>X axis</small></label>
+      <label>Zones <small>equal split</small></label>
       <div class="stepper" data-for="zx"><button>−</button><input id="zx" value="1" data-step="1" data-min="1"><button>+</button></div>
       <span class="unit">×</span>
     </div>
+    <div class="field col">
+      <label>Positions <small>mm or % from the left inner wall; overrides zones</small></label>
+      <input class="txt" id="dvpx" placeholder="e.g. 40, 66%">
+    </div>
     <div class="field">
-      <label>Zones along width <small>Y axis</small></label>
+      <label>Height <small>0 = full height</small></label>
+      <div class="stepper" data-for="dvhx"><button>−</button><input id="dvhx" value="0" data-step="1" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="seg-label">Lengthwise — split the width</div>
+    <div class="field">
+      <label>Zones <small>equal split</small></label>
       <div class="stepper" data-for="zy"><button>−</button><input id="zy" value="1" data-step="1" data-min="1"><button>+</button></div>
       <span class="unit">×</span>
+    </div>
+    <div class="field col">
+      <label>Positions <small>mm or % from the front inner wall; overrides zones</small></label>
+      <input class="txt" id="dvpy" placeholder="e.g. 25, 50%, 75%">
+    </div>
+    <div class="field">
+      <label>Height <small>0 = full height</small></label>
+      <div class="stepper" data-for="dvhy"><button>−</button><input id="dvhy" value="0" data-step="1" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
     </div>
   </section>
 
@@ -604,20 +634,35 @@ function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
   return buildLidShell(L, W, wall, R, clr, 0, lidT, tor, skirt);
 }
 
-/* ── dividers: split the cavity into zones ── */
-function buildDividers(L, W, wall, bottom, nx, ny, topZ) {
+/* ── dividers: split the cavity into zones ──
+   xs — crosswise divider centerlines (absolute x), topX — their top;
+   ys — lengthwise divider centerlines (absolute y), topY — their top. */
+function buildDividers(L, W, wall, bottom, xs, topX, ys, topY) {
   const T = [];
   const ix = L/2 - wall, iy = W/2 - wall;
   const dt = Math.min(wall, 1.6);
-  for (let k = 1; k < nx; k++) {
-    const x = -ix + 2*ix*k/nx;
-    T.push(...cuboid(x - dt/2, x + dt/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topZ));
-  }
-  for (let k = 1; k < ny; k++) {
-    const y = -iy + 2*iy*k/ny;
-    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dt/2, y + dt/2, bottom - 0.4, topZ));
-  }
+  for (const x of xs)
+    T.push(...cuboid(x - dt/2, x + dt/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topX));
+  for (const y of ys)
+    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dt/2, y + dt/2, bottom - 0.4, topY));
   return T;
+}
+
+// Parse a divider position list: numbers in mm, or % of the inner span,
+// measured from the inner wall. Empty text falls back to an equal split.
+function parseDivPositions(txt, count, span) {
+  const pos = [];
+  let bad = false;
+  if (txt.trim()) {
+    for (const tok of txt.trim().split(/[,;\s]+/)) {
+      if (!tok) continue;
+      const v = tok.endsWith("%") ? parseFloat(tok) / 100 * span : parseFloat(tok);
+      if (isFinite(v)) pos.push(v); else bad = true;
+    }
+  } else {
+    for (let k = 1; k < count; k++) pos.push(span * k / count);
+  }
+  return { pos: pos.sort((a, b) => a - b), bad };
 }
 
 /* ── sliding lid (pencil-box style) ──
@@ -915,6 +960,7 @@ function rebuild() {
     wall: val("wall"), bottom: val("bot"), rad: val("rad"),
     clr: val("clr"), lip: val("lip"), skirt: val("skirt"),
     lidT: val("lidT"), tor: val("tor"), zx: val("zx"), zy: val("zy"),
+    dvhx: val("dvhx"), dvhy: val("dvhy"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -927,6 +973,9 @@ function rebuild() {
   if (mode === "outer") { L = raw.len; W = raw.wid; H = raw.hgt; R = raw.rad; }
   else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; H = raw.hgt + raw.bottom + lidVsp; R = raw.rad + raw.wall; }
   const nx = Math.max(1, Math.round(raw.zx)), ny = Math.max(1, Math.round(raw.zy));
+  const ix = L/2 - raw.wall, iy = W/2 - raw.wall;
+  const px = parseDivPositions($("dvpx").value, nx, 2*ix); // crosswise dividers
+  const py = parseDivPositions($("dvpy").value, ny, 2*iy); // lengthwise dividers
 
   const warnings = [];
   if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1)
@@ -960,8 +1009,13 @@ function rebuild() {
       warnings.push("Too narrow for the sliding lid (needs ≥ 8 mm of inner width).");
     if (L < 30) warnings.push("The sliding lid needs a length of 30 mm or more.");
   }
-  if ((nx > 1 && (L - 2*raw.wall) / nx < 4) || (ny > 1 && (W - 2*raw.wall) / ny < 4))
-    warnings.push("Divider zones come out smaller than 4 mm — reduce the zone count.");
+  if (px.bad || py.bad)
+    warnings.push("Couldn't read some divider positions — use numbers in mm or percentages.");
+  const gapOK = (pos, span) => [0, ...pos, span].every((v, i, a) => i === 0 || v - a[i-1] >= 3);
+  if (!gapOK(px.pos, 2*ix) || !gapOK(py.pos, 2*iy))
+    warnings.push("Divider zones come out smaller than 3 mm — adjust the positions or count.");
+  if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2))
+    warnings.push("Partial dividers need a height of at least 2 mm.");
 
   const ok = warnings.length === 0;
   let boxTris = [], lidTris = [];
@@ -986,7 +1040,12 @@ function rebuild() {
       if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT, raw.tor, raw.skirt));
       if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT, raw.tor));
     }
-    if (nx > 1 || ny > 1) base.push(...buildDividers(L, W, raw.wall, raw.bottom, nx, ny, divTop));
+    if (px.pos.length || py.pos.length) {
+      const topX = raw.dvhx > 0 ? Math.min(raw.bottom + raw.dvhx, divTop) : divTop;
+      const topY = raw.dvhy > 0 ? Math.min(raw.bottom + raw.dvhy, divTop) : divTop;
+      base.push(...buildDividers(L, W, raw.wall, raw.bottom,
+        px.pos.map(o => -ix + o), topX, py.pos.map(o => -iy + o), topY));
+    }
     boxTris = clean(base);
   }
   model = { boxTris, lidTris, L, W, H, raw, ok };
@@ -1012,7 +1071,8 @@ function rebuild() {
       ["capacity", `≈ ${fmt(capacity, 0)} <i>ml</i>`],
       [boxName, `${fmt(volBox)} <i>cm³</i> · ${fmt(volBox*1.24)} <i>g PLA</i>`],
     ];
-    if (nx * ny > 1) rows.splice(2, 0, ["zones", `${nx} × ${ny}`]);
+    if (px.pos.length || py.pos.length)
+      rows.splice(2, 0, ["zones", `${px.pos.length + 1} × ${py.pos.length + 1}`]);
     if (lidTris.length) {
       const volLid = meshVolume(lidTris) / 1000;
       const name = lidType === "cap" ? "plastic, cap" : "plastic, lid";
@@ -1234,6 +1294,9 @@ document.querySelectorAll(".stepper").forEach(st => {
     rebuild();
   });
 });
+
+// divider position lists
+document.querySelectorAll(".txt").forEach(inp => inp.addEventListener("input", rebuild));
 
 // dimension mode switch
 $("modeSeg").querySelectorAll("button").forEach(btn => {

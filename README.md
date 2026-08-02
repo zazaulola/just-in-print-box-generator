@@ -11,8 +11,11 @@ JavaScript.
 
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness, corner radius (0 = sharp corners).
-- **Dividers** — split the cavity into zones along both axes; divider height
-  adapts to the chosen lid (below the inset lip, below the sliding slot, etc.).
+- **Dividers** — split the cavity into zones along both axes: an equal split
+  by zone count, or explicit divider positions in mm or % of the inner span
+  (e.g. `40, 66%`). Crosswise and lengthwise dividers take separate heights
+  (0 = full height, capped per lid type: below the inset lip, below the
+  sliding slot, and so on).
 - **Five lid options:**
   - **None** — an open tray.
   - **Inset** — a lid with a hollow lip that drops inside the box. Friction
