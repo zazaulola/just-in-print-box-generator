@@ -248,7 +248,7 @@
   <header class="reveal" style="animation-delay:.02s">
     <span class="tag">OFFLINE TOOL · v1.0</span>
     <h1>Box<em>.stl</em></h1>
-    <p>A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. All values are in millimeters.</p>
+    <p>A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.</p>
   </header>
 
   <section class="group reveal" style="animation-delay:.08s">
@@ -256,6 +256,10 @@
     <div class="seg" id="modeSeg">
       <button data-mode="outer" class="on">Outer</button>
       <button data-mode="inner">Inner</button>
+    </div>
+    <div class="seg" id="unitSeg" style="margin-top:-6px">
+      <button data-unit="mm" class="on">Metric — mm</button>
+      <button data-unit="in">Imperial — inches</button>
     </div>
     <div class="field">
       <label>Length <small>X axis</small></label>
@@ -362,11 +366,11 @@
     <div class="seg-label">Crosswise — split the length</div>
     <div class="field">
       <label>Zones <small>equal split</small></label>
-      <div class="stepper" data-for="zx"><button>−</button><input id="zx" value="1" data-step="1" data-min="1"><button>+</button></div>
+      <div class="stepper" data-for="zx"><button>−</button><input id="zx" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
       <span class="unit">×</span>
     </div>
     <div class="field col">
-      <label>Positions <small>mm or % from the left inner wall; overrides zones</small></label>
+      <label>Positions <small>length units or % from the left inner wall; overrides zones</small></label>
       <input class="txt" id="dvpx" placeholder="e.g. 40, 66%">
     </div>
     <div class="field">
@@ -374,19 +378,29 @@
       <div class="stepper" data-for="dvhx"><button>−</button><input id="dvhx" value="0" data-step="1" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
+    <div class="field">
+      <label>Thickness</label>
+      <div class="stepper" data-for="dvtx"><button>−</button><input id="dvtx" value="1.2" data-step="0.2" data-min="0.4"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
     <div class="seg-label">Lengthwise — split the width</div>
     <div class="field">
       <label>Zones <small>equal split</small></label>
-      <div class="stepper" data-for="zy"><button>−</button><input id="zy" value="1" data-step="1" data-min="1"><button>+</button></div>
+      <div class="stepper" data-for="zy"><button>−</button><input id="zy" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
       <span class="unit">×</span>
     </div>
     <div class="field col">
-      <label>Positions <small>mm or % from the front inner wall; overrides zones</small></label>
+      <label>Positions <small>length units or % from the front inner wall; overrides zones</small></label>
       <input class="txt" id="dvpy" placeholder="e.g. 25, 50%, 75%">
     </div>
     <div class="field">
       <label>Height <small>0 = full height</small></label>
       <div class="stepper" data-for="dvhy"><button>−</button><input id="dvhy" value="0" data-step="1" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field">
+      <label>Thickness</label>
+      <div class="stepper" data-for="dvty"><button>−</button><input id="dvty" value="1.2" data-step="0.2" data-min="0.4"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
   </section>
@@ -637,32 +651,43 @@ function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
 /* ── dividers: split the cavity into zones ──
    xs — crosswise divider centerlines (absolute x), topX — their top;
    ys — lengthwise divider centerlines (absolute y), topY — their top. */
-function buildDividers(L, W, wall, bottom, xs, topX, ys, topY) {
+function buildDividers(L, W, wall, bottom, xs, topX, dtX, ys, topY, dtY) {
   const T = [];
   const ix = L/2 - wall, iy = W/2 - wall;
-  const dt = Math.min(wall, 1.6);
   for (const x of xs)
-    T.push(...cuboid(x - dt/2, x + dt/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topX));
+    T.push(...cuboid(x - dtX/2, x + dtX/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topX));
   for (const y of ys)
-    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dt/2, y + dt/2, bottom - 0.4, topY));
+    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dtY/2, y + dtY/2, bottom - 0.4, topY));
   return T;
 }
 
-// Parse a divider position list: numbers in mm, or % of the inner span,
-// measured from the inner wall. Empty text falls back to an equal split.
+// Parse a divider position list: numbers in the current length unit, or
+// % of the inner span, measured from the inner wall. Empty text falls
+// back to an equal split. Returns positions in mm.
 function parseDivPositions(txt, count, span) {
   const pos = [];
   let bad = false;
   if (txt.trim()) {
     for (const tok of txt.trim().split(/[,;\s]+/)) {
       if (!tok) continue;
-      const v = tok.endsWith("%") ? parseFloat(tok) / 100 * span : parseFloat(tok);
+      const v = tok.endsWith("%") ? parseFloat(tok) / 100 * span : toMM(parseFloat(tok));
       if (isFinite(v)) pos.push(v); else bad = true;
     }
   } else {
     for (let k = 1; k < count; k++) pos.push(span * k / count);
   }
   return { pos: pos.sort((a, b) => a - b), bad };
+}
+
+// Clear (usable) zone sizes between walls and dividers of thickness dt
+function zoneSizes(pos, span, dt) {
+  const b = [0, ...pos, span];
+  return b.slice(1).map((v, i) => {
+    let s = v - b[i];
+    if (i > 0) s -= dt/2;
+    if (i < b.length - 2) s -= dt/2;
+    return s;
+  });
 }
 
 /* ── sliding lid (pencil-box style) ──
@@ -947,20 +972,27 @@ function toSTL(tris, name) {
 
 const $ = id => document.getElementById(id);
 let mode = "outer";
+let unit = "mm";         // mm | in — display only; geometry and STL stay in mm
 let lidType = "none";    // none | inset | cap | hinge | slide
 let hingeKind = "pip";   // pip | pin | snap
 let latchKind = "flap";  // flap | tongue | none
 let model = null;        // { boxTris, lidTris, L, W, H, raw, ok }
 
-function val(id) { return parseFloat($(id).value.replace(",", ".")); }
+const IN = 25.4;
+const toMM = v => unit === "in" ? v * IN : v; // input value → mm
+
+// input value in mm regardless of the display unit
+function val(id) { return toMM(parseFloat($(id).value.replace(",", "."))); }
+// unitless input value (zone counts)
+function cnt(id) { return parseFloat($(id).value.replace(",", ".")); }
 
 function rebuild() {
   const raw = {
     len: val("len"), wid: val("wid"), hgt: val("hgt"),
     wall: val("wall"), bottom: val("bot"), rad: val("rad"),
     clr: val("clr"), lip: val("lip"), skirt: val("skirt"),
-    lidT: val("lidT"), tor: val("tor"), zx: val("zx"), zy: val("zy"),
-    dvhx: val("dvhx"), dvhy: val("dvhy"),
+    lidT: val("lidT"), tor: val("tor"), zx: cnt("zx"), zy: cnt("zy"),
+    dvhx: val("dvhx"), dvhy: val("dvhy"), dvtx: val("dvtx"), dvty: val("dvty"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -976,6 +1008,8 @@ function rebuild() {
   const ix = L/2 - raw.wall, iy = W/2 - raw.wall;
   const px = parseDivPositions($("dvpx").value, nx, 2*ix); // crosswise dividers
   const py = parseDivPositions($("dvpy").value, ny, 2*iy); // lengthwise dividers
+  const zsx = zoneSizes(px.pos, 2*ix, raw.dvtx);           // zone sizes along the length
+  const zsy = zoneSizes(py.pos, 2*iy, raw.dvty);           // zone sizes along the width
 
   const warnings = [];
   if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1)
@@ -1010,10 +1044,9 @@ function rebuild() {
     if (L < 30) warnings.push("The sliding lid needs a length of 30 mm or more.");
   }
   if (px.bad || py.bad)
-    warnings.push("Couldn't read some divider positions — use numbers in mm or percentages.");
-  const gapOK = (pos, span) => [0, ...pos, span].every((v, i, a) => i === 0 || v - a[i-1] >= 3);
-  if (!gapOK(px.pos, 2*ix) || !gapOK(py.pos, 2*iy))
-    warnings.push("Divider zones come out smaller than 3 mm — adjust the positions or count.");
+    warnings.push("Couldn't read some divider positions — use numbers or percentages.");
+  if ((px.pos.length || py.pos.length) && Math.min(...zsx, ...zsy) < 3)
+    warnings.push("Divider zones come out smaller than 3 mm — adjust the positions, count, or thickness.");
   if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2))
     warnings.push("Partial dividers need a height of at least 2 mm.");
 
@@ -1044,7 +1077,7 @@ function rebuild() {
       const topX = raw.dvhx > 0 ? Math.min(raw.bottom + raw.dvhx, divTop) : divTop;
       const topY = raw.dvhy > 0 ? Math.min(raw.bottom + raw.dvhy, divTop) : divTop;
       base.push(...buildDividers(L, W, raw.wall, raw.bottom,
-        px.pos.map(o => -ix + o), topX, py.pos.map(o => -iy + o), topY));
+        px.pos.map(o => -ix + o), topX, raw.dvtx, py.pos.map(o => -iy + o), topY, raw.dvty));
     }
     boxTris = clean(base);
   }
@@ -1057,6 +1090,10 @@ function rebuild() {
 
   // data sheet
   const fmt = (x, d = 1) => x.toLocaleString("en-US", { maximumFractionDigits: d });
+  const fmtL = (x, d) => unit === "in" ? fmt(x / IN, d ?? 2) : fmt(x, d ?? 1); // length in display units
+  const plastic = v => unit === "in" // v in cm³ → volume · PLA weight
+    ? `${fmt(v / 16.387, 2)} <i>in³</i> · ${fmt(v * 1.24 / 28.35, 2)} <i>oz PLA</i>`
+    : `${fmt(v)} <i>cm³</i> · ${fmt(v * 1.24)} <i>g PLA</i>`;
   let statsHtml = "";
   if (ok) {
     const volBox = meshVolume(boxTris) / 1000; // cm³
@@ -1066,21 +1103,27 @@ function rebuild() {
     const capacity = (li*wi - (4 - Math.PI)*ri*ri) * innerH / 1000; // ml
     const boxName = lidType === "hinge" && hingeKind === "pip" ? "plastic, part" : "plastic, box";
     const rows = [
-      ["outer size", `${fmt(L)}×${fmt(W)}×${fmt(H)} <i>mm</i>`],
-      ["inside", `${fmt(li)}×${fmt(wi)}×${fmt(innerH)} <i>mm</i>`],
-      ["capacity", `≈ ${fmt(capacity, 0)} <i>ml</i>`],
-      [boxName, `${fmt(volBox)} <i>cm³</i> · ${fmt(volBox*1.24)} <i>g PLA</i>`],
+      ["outer size", `${fmtL(L)}×${fmtL(W)}×${fmtL(H)} <i>${unit}</i>`],
+      ["inside", `${fmtL(li)}×${fmtL(wi)}×${fmtL(innerH)} <i>${unit}</i>`],
+      ["capacity", unit === "in" ? `≈ ${fmt(capacity / 29.5735, 1)} <i>fl oz</i>` : `≈ ${fmt(capacity, 0)} <i>ml</i>`],
+      [boxName, plastic(volBox)],
     ];
-    if (px.pos.length || py.pos.length)
+    if (px.pos.length || py.pos.length) {
       rows.splice(2, 0, ["zones", `${px.pos.length + 1} × ${py.pos.length + 1}`]);
+      let at = 3;
+      if (px.pos.length)
+        rows.splice(at++, 0, ["zone sizes, along L", `${zsx.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
+      if (py.pos.length)
+        rows.splice(at++, 0, ["zone sizes, along W", `${zsy.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
+    }
     if (lidTris.length) {
       const volLid = meshVolume(lidTris) / 1000;
       const name = lidType === "cap" ? "plastic, cap" : "plastic, lid";
-      rows.push([name, `${fmt(volLid)} <i>cm³</i> · ${fmt(volLid*1.24)} <i>g PLA</i>`]);
+      rows.push([name, plastic(volLid)]);
     }
     if (lidType === "hinge" && hingeKind === "pin") {
       const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, "pin");
-      rows.push(["hinge pin", `⌀1.75 filament × ${Math.ceil(g.HL + 4)} <i>mm</i>`]);
+      rows.push(["hinge pin", `⌀1.75 filament × ${fmtL(Math.ceil(g.HL + 4))} <i>${unit}</i>`]);
     }
     rows.push(["triangles", fmt(boxTris.length + lidTris.length, 0)]);
     statsHtml = rows.map(([k, v]) =>
@@ -1090,7 +1133,7 @@ function rebuild() {
   }
   $("stats").innerHTML = statsHtml;
 
-  $("hudDims").textContent = ok ? `${fmt(L)} × ${fmt(W)} × ${fmt(H)} mm` : "—";
+  $("hudDims").textContent = ok ? `${fmtL(L)} × ${fmtL(W)} × ${fmtL(H)} ${unit}` : "—";
   $("dlBox").disabled = !ok;
   $("dlLid").disabled = !ok;
 
@@ -1273,15 +1316,17 @@ canvas.addEventListener("wheel", e => {
   zoom = Math.min(6, Math.max(0.25, zoom * (e.deltaY > 0 ? 0.92 : 1.09)));
 }, { passive: false });
 
-// steppers: −/+ buttons and keyboard input
+// steppers: −/+ buttons and keyboard input; steps and minimums are declared
+// in mm and scale with the display unit (integer steppers are unitless)
 document.querySelectorAll(".stepper").forEach(st => {
   const inp = st.querySelector("input");
   const [minus, plus] = st.querySelectorAll("button");
-  const step = parseFloat(inp.dataset.step), min = parseFloat(inp.dataset.min);
+  const k = () => (inp.dataset.int || unit === "mm") ? 1 : 1 / IN;
+  const rf = () => (!inp.dataset.int && unit === "in") ? 1000 : 100;
   const nudge = dir => {
     const cur = parseFloat(inp.value.replace(",", ".")) || 0;
-    const next = Math.max(min, Math.round((cur + dir * step) * 100) / 100);
-    inp.value = next;
+    const step = parseFloat(inp.dataset.step) * k(), min = parseFloat(inp.dataset.min) * k();
+    inp.value = Math.max(min, Math.round((cur + dir * step) * rf()) / rf());
     rebuild();
   };
   minus.addEventListener("click", () => nudge(-1));
@@ -1290,7 +1335,34 @@ document.querySelectorAll(".stepper").forEach(st => {
   inp.addEventListener("focus", () => inp.select());
   inp.addEventListener("blur", () => { // normalize after manual typing
     const cur = parseFloat(inp.value.replace(",", "."));
-    inp.value = isFinite(cur) ? Math.max(min, cur) : min;
+    inp.value = isFinite(cur) ? Math.max(parseFloat(inp.dataset.min) * k(), cur) : parseFloat(inp.dataset.min) * k();
+    rebuild();
+  });
+});
+
+// unit system: display-side conversion only — geometry and STL stay in mm
+$("unitSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const next = btn.dataset.unit;
+    if (next === unit) return;
+    $("unitSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    const f = next === "in" ? 1 / IN : IN;
+    document.querySelectorAll(".stepper input").forEach(inp => {
+      if (inp.dataset.int) return;
+      const cur = parseFloat(inp.value.replace(",", "."));
+      if (isFinite(cur)) inp.value = +(cur * f).toFixed(next === "in" ? 4 : 2);
+    });
+    document.querySelectorAll(".txt").forEach(inp => { // convert absolute tokens, keep %
+      inp.value = inp.value.split(/([,;\s]+)/).map(tok => {
+        if (!tok || /^[,;\s]+$/.test(tok) || tok.endsWith("%")) return tok;
+        const v = parseFloat(tok);
+        return isFinite(v) ? String(+(v * f).toFixed(next === "in" ? 3 : 1)) : tok;
+      }).join("");
+    });
+    document.querySelectorAll(".unit").forEach(u => {
+      if (u.textContent === "mm" || u.textContent === "in") u.textContent = next;
+    });
+    unit = next;
     rebuild();
   });
 });

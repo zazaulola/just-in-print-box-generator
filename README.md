@@ -12,10 +12,14 @@ JavaScript.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness, corner radius (0 = sharp corners).
 - **Dividers** — split the cavity into zones along both axes: an equal split
-  by zone count, or explicit divider positions in mm or % of the inner span
-  (e.g. `40, 66%`). Crosswise and lengthwise dividers take separate heights
-  (0 = full height, capped per lid type: below the inset lip, below the
-  sliding slot, and so on).
+  by zone count, or explicit divider positions in length units or % of the
+  inner span (e.g. `40, 66%`). Crosswise and lengthwise dividers take
+  separate heights (0 = full height, capped per lid type: below the inset
+  lip, below the sliding slot, and so on) and separate thicknesses. The data
+  sheet lists the clear size of every resulting zone.
+- **Metric or imperial** — work in millimeters or inches (capacity in ml or
+  fl oz, plastic in cm³/g or in³/oz); the geometry and the exported STL are
+  always in millimeters, as slicers expect.
 - **Five lid options:**
   - **None** — an open tray.
   - **Inset** — a lid with a hollow lip that drops inside the box. Friction
