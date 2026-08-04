@@ -50,6 +50,10 @@
     scrollbar-width: thin;
     scrollbar-color: var(--line) transparent;
   }
+  header .tagrow {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
   header .tag {
     display: inline-block;
     font-family: var(--font-mono);
@@ -59,8 +63,14 @@
     border: 1px solid var(--accent-dim);
     padding: 3px 8px 2px;
     border-radius: 2px;
-    margin-bottom: 12px;
   }
+  #langSel {
+    background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 3px;
+    font-family: var(--font-mono); font-size: 11px;
+    padding: 3px 6px; outline: none; cursor: pointer;
+  }
+  #langSel:focus { border-color: var(--accent-dim); color: var(--text); }
   header h1 {
     font-family: var(--font-disp);
     font-weight: 700;
@@ -246,7 +256,17 @@
 
 <aside>
   <header class="reveal" style="animation-delay:.02s">
-    <span class="tag">OFFLINE TOOL · v1.0</span>
+    <div class="tagrow">
+      <span class="tag" id="hdrTag">OFFLINE TOOL · v1.0</span>
+      <select id="langSel" aria-label="Language">
+        <option value="en">EN</option>
+        <option value="fr">FR</option>
+        <option value="de">DE</option>
+        <option value="es">ES</option>
+        <option value="zh">中文</option>
+        <option value="ru">RU</option>
+      </select>
+    </div>
     <h1>Box<em>.stl</em></h1>
     <p>A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.</p>
   </header>
@@ -986,6 +1006,354 @@ function val(id) { return toMM(parseFloat($(id).value.replace(",", "."))); }
 // unitless input value (zone counts)
 function cnt(id) { return parseFloat($(id).value.replace(",", ".")); }
 
+/* ═══════════════ i18n ═══════════════ */
+
+let lang = "en";
+
+const I18N = {
+en: {
+  locale: "en-US",
+  title: "Box.STL — Parametric Box Generator for 3D Printing",
+  tag: "OFFLINE TOOL · v1.0",
+  intro: "A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.",
+  g1: "Dimensions", g2: "Walls", g3: "Lid", g4: "Dividers", g5: "Data sheet",
+  mOuter: "Outer", mInner: "Inner", uMetric: "Metric — mm", uImperial: "Imperial — inches",
+  f_len: "Length <small>X axis</small>", f_wid: "Width <small>Y axis</small>", f_hgt: "Height <small>Z axis</small>",
+  f_wall: "Wall thickness", f_bot: "Floor thickness", f_rad: "Corner radius <small>0 = sharp corners</small>",
+  f_clr: "Fit clearance <small>per side</small>", f_lip: "Lip height",
+  f_tor: "Lid body height <small>above the seam</small>", f_skirt: "Lid skirt height <small>apron over the walls</small>",
+  f_lidT: "Lid thickness",
+  f_zones: "Zones <small>equal split</small>",
+  f_dvpx: "Positions <small>length units or % from the left inner wall; overrides zones</small>",
+  f_dvpy: "Positions <small>length units or % from the front inner wall; overrides zones</small>",
+  f_divh: "Height <small>0 = full height</small>", f_divth: "Thickness",
+  ph_x: "e.g. 40, 66%", ph_y: "e.g. 25, 50%, 75%",
+  lid_none: "None", lid_inset: "Inset", lid_cap: "Cap", lid_hinge: "Hinged", lid_slide: "Sliding",
+  segHinge: "Hinge", segLatch: "Latch",
+  segCross: "Crosswise — split the length", segLength: "Lengthwise — split the width",
+  h_pip: "In place", h_pin: "Filament pin", h_snap: "Snap-on",
+  l_flap: "Flap", l_tongue: "Tongue", l_none: "None",
+  hingeNote: "<b>In place</b>: one pre-assembled closed piece; the pins are grown inside the hinges with 0.45 mm clearance — the first turn breaks them free; print in any orientation (e.g. tilted ~45°). <b>Filament pin</b>: box and lid print separately and flat; push 1.75 mm filament through the ⌀2.1 channel and melt the ends. <b>Snap-on</b>: the lid clips onto rods once (hold it upright at ~90° and press straight down) and only comes off deliberately. The flap latch swings on a grown mini-hinge over a wall lug; the tongue latch clicks over a rib on the front wall.",
+  slideNote: "The lid slides into side slots from one end; friction bumps hold it shut and a grip bar helps pull it open. Both parts print flat, no supports.",
+  w_walls: "The walls eat the entire volume: at least 1 mm must remain inside.",
+  w_floor: "The floor almost reaches the full height: the cavity is under 1 mm.",
+  w_clr: "The lid clearance is too large — no room left for the lip.",
+  w_lip: "The lid lip is deeper than the box cavity.",
+  w_capmin: "A cap needs a skirt of at least 2 mm to hold on.",
+  w_capmax: "The cap skirt is longer than the box walls.",
+  w_hingelen: "The box is too short for the hinge: needs ≥ {0} mm in length.",
+  w_flaplen: "Not enough straight run at the front for the latch flap (needs ≥ 20 mm).",
+  w_hingeh: "Too shallow for the hinge and latch: increase the height or reduce the lid body.",
+  w_hingewall: "The hinge needs walls of at least 0.8 mm — thinner knuckle webs won't hold.",
+  w_snaptor: "The snap-on hinge needs the lid body no taller than {0} mm.",
+  w_slideh: "Too shallow for the sliding lid: the slot leaves under 3 mm of cavity.",
+  w_slidew: "Too narrow for the sliding lid (needs ≥ 8 mm of inner width).",
+  w_slidel: "The sliding lid needs a length of 30 mm or more.",
+  w_divparse: "Couldn't read some divider positions — use numbers or percentages.",
+  w_divtight: "Divider zones come out smaller than 3 mm — adjust the positions, count, or thickness.",
+  w_divparth: "Partial dividers need a height of at least 2 mm.",
+  s_outer: "outer size", s_inside: "inside", s_cap: "capacity", s_zones: "zones",
+  s_zonel: "zone sizes, along L", s_zonew: "zone sizes, along W",
+  s_pbox: "plastic, box", s_ppart: "plastic, part", s_plid: "plastic, lid", s_pcap: "plastic, cap",
+  s_pin: "hinge pin", s_tri: "triangles", s_fix: "fix the parameters above",
+  u_ml: "ml", u_floz: "fl oz", u_g: "g PLA", u_oz: "oz PLA", filament: "filament",
+  dl_box: "Download STL — box", dl_lid: "Download STL — lid", dl_cap: "Download STL — cap", dl_both: "Download STL — box + lid",
+  footer: "UNITS: MM · FORMAT: BINARY STL · WORKS OFFLINE",
+  hud_hint: "PREVIEW · <b>drag</b> to rotate · scroll to zoom", hud_outer: "OUTER SIZE",
+},
+fr: {
+  locale: "fr-FR",
+  title: "Box.STL — Générateur paramétrique de boîtes pour l'impression 3D",
+  tag: "OUTIL HORS LIGNE · v1.0",
+  intro: "Une boîte paramétrique pour l'impression 3D. Réglez les dimensions et téléchargez un STL binaire prêt à trancher. Travaillez en millimètres ou en pouces ; le STL est toujours exporté en mm.",
+  g1: "Dimensions", g2: "Parois", g3: "Couvercle", g4: "Séparateurs", g5: "Fiche technique",
+  mOuter: "Extérieures", mInner: "Intérieures", uMetric: "Métrique — mm", uImperial: "Impérial — pouces",
+  f_len: "Longueur <small>axe X</small>", f_wid: "Largeur <small>axe Y</small>", f_hgt: "Hauteur <small>axe Z</small>",
+  f_wall: "Épaisseur des parois", f_bot: "Épaisseur du fond", f_rad: "Rayon des angles <small>0 = angles vifs</small>",
+  f_clr: "Jeu d'ajustement <small>par côté</small>", f_lip: "Hauteur du rebord",
+  f_tor: "Hauteur du corps <small>au-dessus du joint</small>", f_skirt: "Hauteur de la jupe <small>tablier sur les parois</small>",
+  f_lidT: "Épaisseur du couvercle",
+  f_zones: "Zones <small>partage égal</small>",
+  f_dvpx: "Positions <small>en unités ou % depuis la paroi gauche ; prioritaire sur les zones</small>",
+  f_dvpy: "Positions <small>en unités ou % depuis la paroi avant ; prioritaire sur les zones</small>",
+  f_divh: "Hauteur <small>0 = pleine hauteur</small>", f_divth: "Épaisseur",
+  ph_x: "ex. 40, 66%", ph_y: "ex. 25, 50%, 75%",
+  lid_none: "Aucun", lid_inset: "Encastré", lid_cap: "Capuchon", lid_hinge: "À charnière", lid_slide: "Coulissant",
+  segHinge: "Charnière", segLatch: "Fermoir",
+  segCross: "Transversaux — divisent la longueur", segLength: "Longitudinaux — divisent la largeur",
+  h_pip: "En place", h_pin: "Axe filament", h_snap: "À clipser",
+  l_flap: "Battant", l_tongue: "Languette", l_none: "Aucun",
+  hingeNote: "<b>En place</b> : une seule pièce imprimée fermée ; les axes sont formés dans les charnières avec 0,45 mm de jeu — le premier mouvement les libère ; orientation d'impression libre (par ex. inclinée à ~45°). <b>Axe filament</b> : boîte et couvercle s'impriment séparément et à plat ; passez un filament de 1,75 mm dans le canal ⌀2,1 et faites fondre les extrémités. <b>À clipser</b> : le couvercle se clipse une fois sur les axes (tenez-le vertical et appuyez vers le bas) et ne s'enlève que volontairement. Le battant pivote sur une mini-charnière imprimée et s'accroche à un ergot ; la languette s'encliquette sur une nervure de la paroi avant.",
+  slideNote: "Le couvercle coulisse dans des rainures latérales depuis une extrémité ; des bossages de friction le maintiennent fermé et une barrette aide à l'ouvrir. Les deux pièces s'impriment à plat, sans supports.",
+  w_walls: "Les parois occupent tout le volume : il doit rester au moins 1 mm à l'intérieur.",
+  w_floor: "Le fond atteint presque la pleine hauteur : la cavité fait moins de 1 mm.",
+  w_clr: "Le jeu du couvercle est trop grand — plus de place pour le rebord.",
+  w_lip: "Le rebord du couvercle est plus profond que la cavité.",
+  w_capmin: "Un capuchon a besoin d'une jupe d'au moins 2 mm pour tenir.",
+  w_capmax: "La jupe du capuchon dépasse les parois de la boîte.",
+  w_hingelen: "Boîte trop courte pour la charnière : longueur ≥ {0} mm requise.",
+  w_flaplen: "Pas assez de partie droite à l'avant pour le battant (≥ 20 mm requis).",
+  w_hingeh: "Trop peu de hauteur pour la charnière et le fermoir : augmentez la hauteur ou réduisez le corps du couvercle.",
+  w_hingewall: "La charnière exige des parois d'au moins 0,8 mm — plus fin, les attaches ne tiennent pas.",
+  w_snaptor: "La charnière à clipser exige un corps de couvercle d'au plus {0} mm.",
+  w_slideh: "Trop peu de hauteur pour le couvercle coulissant : la rainure laisse moins de 3 mm de cavité.",
+  w_slidew: "Trop étroit pour le couvercle coulissant (largeur intérieure ≥ 8 mm requise).",
+  w_slidel: "Le couvercle coulissant exige une longueur d'au moins 30 mm.",
+  w_divparse: "Positions de séparateurs illisibles — utilisez des nombres ou des pourcentages.",
+  w_divtight: "Des zones font moins de 3 mm — ajustez positions, nombre ou épaisseur.",
+  w_divparth: "Les séparateurs partiels exigent une hauteur d'au moins 2 mm.",
+  s_outer: "cotes extérieures", s_inside: "intérieur", s_cap: "contenance", s_zones: "zones",
+  s_zonel: "tailles des zones (L)", s_zonew: "tailles des zones (l)",
+  s_pbox: "plastique, boîte", s_ppart: "plastique, pièce", s_plid: "plastique, couvercle", s_pcap: "plastique, capuchon",
+  s_pin: "axe de charnière", s_tri: "triangles", s_fix: "corrigez les paramètres ci-dessus",
+  u_ml: "ml", u_floz: "fl oz", u_g: "g PLA", u_oz: "oz PLA", filament: "filament",
+  dl_box: "Télécharger STL — boîte", dl_lid: "Télécharger STL — couvercle", dl_cap: "Télécharger STL — capuchon", dl_both: "Télécharger STL — boîte + couvercle",
+  footer: "UNITÉS : MM · FORMAT : STL BINAIRE · FONCTIONNE HORS LIGNE",
+  hud_hint: "APERÇU · <b>glisser</b> pour tourner · molette pour zoomer", hud_outer: "COTES EXTÉRIEURES",
+},
+de: {
+  locale: "de-DE",
+  title: "Box.STL — Parametrischer Box-Generator für den 3D-Druck",
+  tag: "OFFLINE-WERKZEUG · v1.0",
+  intro: "Eine parametrische Box für den 3D-Druck. Maße einstellen — druckfertiges binäres STL herunterladen. In Millimetern oder Zoll arbeiten; das STL wird immer in mm exportiert.",
+  g1: "Abmessungen", g2: "Wände", g3: "Deckel", g4: "Trennwände", g5: "Datenblatt",
+  mOuter: "Außen", mInner: "Innen", uMetric: "Metrisch — mm", uImperial: "Imperial — Zoll",
+  f_len: "Länge <small>X-Achse</small>", f_wid: "Breite <small>Y-Achse</small>", f_hgt: "Höhe <small>Z-Achse</small>",
+  f_wall: "Wandstärke", f_bot: "Bodenstärke", f_rad: "Eckenradius <small>0 = scharfe Ecken</small>",
+  f_clr: "Passungsspiel <small>pro Seite</small>", f_lip: "Lippenhöhe",
+  f_tor: "Deckelkörper-Höhe <small>über der Fuge</small>", f_skirt: "Schürzenhöhe <small>über den Wänden</small>",
+  f_lidT: "Deckelstärke",
+  f_zones: "Zonen <small>gleichmäßig</small>",
+  f_dvpx: "Positionen <small>Längeneinheiten oder % von der linken Innenwand; überschreibt Zonen</small>",
+  f_dvpy: "Positionen <small>Längeneinheiten oder % von der vorderen Innenwand; überschreibt Zonen</small>",
+  f_divh: "Höhe <small>0 = volle Höhe</small>", f_divth: "Stärke",
+  ph_x: "z. B. 40, 66%", ph_y: "z. B. 25, 50%, 75%",
+  lid_none: "Kein", lid_inset: "Einlege", lid_cap: "Stülp", lid_hinge: "Scharnier", lid_slide: "Schiebe",
+  segHinge: "Scharnier", segLatch: "Verschluss",
+  segCross: "Quer — teilen die Länge", segLength: "Längs — teilen die Breite",
+  h_pip: "Integriert", h_pin: "Filament-Stift", h_snap: "Aufrasten",
+  l_flap: "Klappe", l_tongue: "Zunge", l_none: "Kein",
+  hingeNote: "<b>Integriert</b>: ein fertig montiert gedrucktes, geschlossenes Teil; die Stifte wachsen mit 0,45 mm Spiel in den Scharnieren — die erste Drehung löst sie; Druckausrichtung beliebig (z. B. ~45° geneigt). <b>Filament-Stift</b>: Box und Deckel drucken getrennt und flach; 1,75-mm-Filament durch den ⌀2,1-Kanal schieben und die Enden verschmelzen. <b>Aufrasten</b>: Der Deckel rastet einmal auf die Stangen (senkrecht halten und nach unten drücken) und löst sich nur absichtlich. Die Klappe schwingt an einem gedruckten Mini-Scharnier über einen Wandnocken; die Zunge rastet über eine Rippe der Vorderwand.",
+  slideNote: "Der Deckel gleitet von einer Seite in seitliche Nuten; Reibnoppen halten ihn geschlossen, eine Griffleiste hilft beim Öffnen. Beide Teile drucken flach, ohne Stützen.",
+  w_walls: "Die Wände füllen das ganze Volumen: innen muss mindestens 1 mm bleiben.",
+  w_floor: "Der Boden reicht fast bis zur vollen Höhe: der Hohlraum ist unter 1 mm.",
+  w_clr: "Das Deckelspiel ist zu groß — kein Platz mehr für die Lippe.",
+  w_lip: "Die Deckellippe ist tiefer als der Hohlraum der Box.",
+  w_capmin: "Ein Stülpdeckel braucht eine Schürze von mindestens 2 mm.",
+  w_capmax: "Die Schürze ist länger als die Wände der Box.",
+  w_hingelen: "Die Box ist zu kurz für das Scharnier: Länge ≥ {0} mm nötig.",
+  w_flaplen: "Vorn fehlt gerade Strecke für die Klappe (≥ 20 mm nötig).",
+  w_hingeh: "Zu flach für Scharnier und Verschluss: Höhe erhöhen oder Deckelkörper verkleinern.",
+  w_hingewall: "Das Scharnier braucht Wände ab 0,8 mm — dünnere Stege halten nicht.",
+  w_snaptor: "Das Aufrast-Scharnier erlaubt einen Deckelkörper bis höchstens {0} mm.",
+  w_slideh: "Zu flach für den Schiebedeckel: die Nut lässt unter 3 mm Hohlraum.",
+  w_slidew: "Zu schmal für den Schiebedeckel (Innenbreite ≥ 8 mm nötig).",
+  w_slidel: "Der Schiebedeckel braucht mindestens 30 mm Länge.",
+  w_divparse: "Trennwand-Positionen unlesbar — Zahlen oder Prozentwerte verwenden.",
+  w_divtight: "Zonen werden schmaler als 3 mm — Positionen, Anzahl oder Stärke anpassen.",
+  w_divparth: "Teilhohe Trennwände brauchen mindestens 2 mm Höhe.",
+  s_outer: "Außenmaß", s_inside: "innen", s_cap: "Fassungsvermögen", s_zones: "Zonen",
+  s_zonel: "Zonengrößen (L)", s_zonew: "Zonengrößen (B)",
+  s_pbox: "Kunststoff, Box", s_ppart: "Kunststoff, Teil", s_plid: "Kunststoff, Deckel", s_pcap: "Kunststoff, Stülpdeckel",
+  s_pin: "Scharnierstift", s_tri: "Dreiecke", s_fix: "Parameter oben korrigieren",
+  u_ml: "ml", u_floz: "fl oz", u_g: "g PLA", u_oz: "oz PLA", filament: "Filament",
+  dl_box: "STL laden — Box", dl_lid: "STL laden — Deckel", dl_cap: "STL laden — Stülpdeckel", dl_both: "STL laden — Box + Deckel",
+  footer: "EINHEITEN: MM · FORMAT: BINÄRES STL · FUNKTIONIERT OFFLINE",
+  hud_hint: "VORSCHAU · <b>ziehen</b> zum Drehen · scrollen zum Zoomen", hud_outer: "AUSSENMASS",
+},
+es: {
+  locale: "es-ES",
+  title: "Box.STL — Generador paramétrico de cajas para impresión 3D",
+  tag: "HERRAMIENTA SIN CONEXIÓN · v1.0",
+  intro: "Una caja paramétrica para impresión 3D. Define las dimensiones y descarga un STL binario listo para laminar. Trabaja en milímetros o pulgadas; el STL siempre se exporta en mm.",
+  g1: "Dimensiones", g2: "Paredes", g3: "Tapa", g4: "Divisores", g5: "Ficha técnica",
+  mOuter: "Exteriores", mInner: "Interiores", uMetric: "Métrico — mm", uImperial: "Imperial — pulgadas",
+  f_len: "Longitud <small>eje X</small>", f_wid: "Anchura <small>eje Y</small>", f_hgt: "Altura <small>eje Z</small>",
+  f_wall: "Grosor de pared", f_bot: "Grosor del fondo", f_rad: "Radio de esquinas <small>0 = esquinas vivas</small>",
+  f_clr: "Holgura de ajuste <small>por lado</small>", f_lip: "Altura del labio",
+  f_tor: "Altura del cuerpo <small>sobre la junta</small>", f_skirt: "Altura del faldón <small>sobre las paredes</small>",
+  f_lidT: "Grosor de la tapa",
+  f_zones: "Zonas <small>partes iguales</small>",
+  f_dvpx: "Posiciones <small>unidades o % desde la pared izquierda; anula las zonas</small>",
+  f_dvpy: "Posiciones <small>unidades o % desde la pared frontal; anula las zonas</small>",
+  f_divh: "Altura <small>0 = altura completa</small>", f_divth: "Grosor",
+  ph_x: "p. ej. 40, 66%", ph_y: "p. ej. 25, 50%, 75%",
+  lid_none: "Sin tapa", lid_inset: "Encajada", lid_cap: "Exterior", lid_hinge: "Con bisagra", lid_slide: "Deslizante",
+  segHinge: "Bisagra", segLatch: "Cierre",
+  segCross: "Transversales — dividen la longitud", segLength: "Longitudinales — dividen la anchura",
+  h_pip: "Integrada", h_pin: "Eje de filamento", h_snap: "A presión",
+  l_flap: "Aldaba", l_tongue: "Lengüeta", l_none: "Sin cierre",
+  hingeNote: "<b>Integrada</b>: una sola pieza impresa cerrada; los ejes crecen dentro de las bisagras con 0,45 mm de holgura — el primer giro los libera; imprime en cualquier orientación (p. ej. inclinada ~45°). <b>Eje de filamento</b>: caja y tapa se imprimen por separado y en plano; pasa filamento de 1,75 mm por el canal de ⌀2,1 y funde los extremos. <b>A presión</b>: la tapa se encaja una vez en los ejes (sostenla vertical y presiona hacia abajo) y solo se quita a propósito. La aldaba oscila sobre una mini-bisagra impresa y cuelga de un diente de la pared; la lengüeta encaja sobre un nervio de la pared frontal.",
+  slideNote: "La tapa se desliza por ranuras laterales desde un extremo; unos resaltes de fricción la mantienen cerrada y una barra ayuda a abrirla. Ambas piezas se imprimen en plano, sin soportes.",
+  w_walls: "Las paredes ocupan todo el volumen: debe quedar al menos 1 mm interior.",
+  w_floor: "El fondo casi alcanza la altura total: la cavidad queda bajo 1 mm.",
+  w_clr: "La holgura de la tapa es demasiado grande — no queda sitio para el labio.",
+  w_lip: "El labio de la tapa es más profundo que la cavidad.",
+  w_capmin: "Una tapa exterior necesita un faldón de al menos 2 mm para sujetarse.",
+  w_capmax: "El faldón es más largo que las paredes de la caja.",
+  w_hingelen: "Caja demasiado corta para la bisagra: se necesita longitud ≥ {0} mm.",
+  w_flaplen: "Falta tramo recto delante para la aldaba (se necesitan ≥ 20 mm).",
+  w_hingeh: "Poca altura para bisagra y cierre: aumenta la altura o reduce el cuerpo de la tapa.",
+  w_hingewall: "La bisagra necesita paredes de al menos 0,8 mm — más finas no aguantan.",
+  w_snaptor: "La bisagra a presión admite un cuerpo de tapa de como máximo {0} mm.",
+  w_slideh: "Poca altura para la tapa deslizante: la ranura deja menos de 3 mm de cavidad.",
+  w_slidew: "Demasiado estrecha para la tapa deslizante (anchura interior ≥ 8 mm).",
+  w_slidel: "La tapa deslizante necesita al menos 30 mm de longitud.",
+  w_divparse: "No se pudieron leer algunas posiciones — usa números o porcentajes.",
+  w_divtight: "Hay zonas de menos de 3 mm — ajusta posiciones, número o grosor.",
+  w_divparth: "Los divisores parciales necesitan al menos 2 mm de altura.",
+  s_outer: "medida exterior", s_inside: "interior", s_cap: "capacidad", s_zones: "zonas",
+  s_zonel: "tamaño de zonas (L)", s_zonew: "tamaño de zonas (A)",
+  s_pbox: "plástico, caja", s_ppart: "plástico, pieza", s_plid: "plástico, tapa", s_pcap: "plástico, tapa ext.",
+  s_pin: "eje de bisagra", s_tri: "triángulos", s_fix: "corrige los parámetros de arriba",
+  u_ml: "ml", u_floz: "fl oz", u_g: "g PLA", u_oz: "oz PLA", filament: "filamento",
+  dl_box: "Descargar STL — caja", dl_lid: "Descargar STL — tapa", dl_cap: "Descargar STL — tapa ext.", dl_both: "Descargar STL — caja + tapa",
+  footer: "UNIDADES: MM · FORMATO: STL BINARIO · FUNCIONA SIN CONEXIÓN",
+  hud_hint: "VISTA · <b>arrastra</b> para girar · rueda para zoom", hud_outer: "MEDIDA EXTERIOR",
+},
+zh: {
+  locale: "zh-CN",
+  title: "Box.STL — 3D 打印参数化盒子生成器",
+  tag: "离线工具 · v1.0",
+  intro: "面向 3D 打印的参数化盒子。设定尺寸，下载可直接切片的二进制 STL。可用毫米或英寸；STL 始终以 mm 导出。",
+  g1: "尺寸", g2: "壁", g3: "盖子", g4: "隔板", g5: "参数表",
+  mOuter: "外部尺寸", mInner: "内部尺寸", uMetric: "公制 — 毫米", uImperial: "英制 — 英寸",
+  f_len: "长度 <small>X 轴</small>", f_wid: "宽度 <small>Y 轴</small>", f_hgt: "高度 <small>Z 轴</small>",
+  f_wall: "壁厚", f_bot: "底厚", f_rad: "圆角半径 <small>0 = 直角</small>",
+  f_clr: "配合间隙 <small>每侧</small>", f_lip: "内唇高度",
+  f_tor: "盖体高度 <small>接缝以上</small>", f_skirt: "裙边高度 <small>包住外壁</small>",
+  f_lidT: "盖厚",
+  f_zones: "分区 <small>均分</small>",
+  f_dvpx: "位置 <small>长度单位或 %，从左内壁起；优先于分区</small>",
+  f_dvpy: "位置 <small>长度单位或 %，从前内壁起；优先于分区</small>",
+  f_divh: "高度 <small>0 = 全高</small>", f_divth: "厚度",
+  ph_x: "例：40, 66%", ph_y: "例：25, 50%, 75%",
+  lid_none: "无", lid_inset: "内嵌盖", lid_cap: "套盖", lid_hinge: "铰链盖", lid_slide: "滑盖",
+  segHinge: "铰链", segLatch: "锁扣",
+  segCross: "横向 — 分割长度", segLength: "纵向 — 分割宽度",
+  h_pip: "一体打印", h_pin: "耗材轴", h_snap: "卡扣",
+  l_flap: "翻扣", l_tongue: "弹舌", l_none: "无",
+  hingeNote: "<b>一体打印</b>：整件闭合打印；轴以 0.45 mm 间隙直接成型于铰链内——首次转动即可松脱；打印方向任意（如倾斜约 45°）。<b>耗材轴</b>：盒体与盖分开平放打印；将 1.75 mm 耗材穿入 ⌀2.1 通道并熔封两端。<b>卡扣</b>：将盖竖直对准轴杆向下按压即可一次卡入，只有刻意操作才能取下。翻扣绕打印的小铰链摆动并挂在壁上的凸块上；弹舌则卡在前壁的凸棱上。",
+  slideNote: "盖从一端滑入两侧滑槽；摩擦凸点将其固定，顶部拉条便于抽出。两件均平放打印，无需支撑。",
+  w_walls: "壁占满了整个体积：内部至少要留 1 mm。",
+  w_floor: "底几乎达到全高：内腔不足 1 mm。",
+  w_clr: "盖的间隙过大——内唇没有空间了。",
+  w_lip: "盖的内唇比盒腔还深。",
+  w_capmin: "套盖需要至少 2 mm 的裙边才能固定。",
+  w_capmax: "套盖裙边比盒壁还长。",
+  w_hingelen: "盒子太短，无法布置铰链：长度需 ≥ {0} mm。",
+  w_flaplen: "前壁直段不足，放不下翻扣（需 ≥ 20 mm）。",
+  w_hingeh: "高度不足以容纳铰链和锁扣：请增加高度或减小盖体。",
+  w_hingewall: "铰链需要至少 0.8 mm 的壁厚——更薄的连接撑不住。",
+  w_snaptor: "卡扣铰链要求盖体不超过 {0} mm。",
+  w_slideh: "高度不足以做滑盖：滑槽下方内腔不足 3 mm。",
+  w_slidew: "宽度不足以做滑盖（内宽需 ≥ 8 mm）。",
+  w_slidel: "滑盖需要至少 30 mm 的长度。",
+  w_divparse: "部分隔板位置无法解析——请使用数字或百分比。",
+  w_divtight: "有分区小于 3 mm——请调整位置、数量或厚度。",
+  w_divparth: "部分高度隔板至少需要 2 mm 高。",
+  s_outer: "外形尺寸", s_inside: "内部", s_cap: "容量", s_zones: "分区",
+  s_zonel: "分区尺寸（长）", s_zonew: "分区尺寸（宽）",
+  s_pbox: "耗材，盒体", s_ppart: "耗材，整件", s_plid: "耗材，盒盖", s_pcap: "耗材，套盖",
+  s_pin: "铰链轴", s_tri: "三角形", s_fix: "请修正上方参数",
+  u_ml: "毫升", u_floz: "fl oz", u_g: "克 PLA", u_oz: "盎司 PLA", filament: "耗材",
+  dl_box: "下载 STL — 盒体", dl_lid: "下载 STL — 盒盖", dl_cap: "下载 STL — 套盖", dl_both: "下载 STL — 盒体＋盖",
+  footer: "单位：MM · 格式：二进制 STL · 可离线使用",
+  hud_hint: "预览 · <b>拖动</b>旋转 · 滚轮缩放", hud_outer: "外形尺寸",
+},
+ru: {
+  locale: "ru-RU",
+  title: "Box.STL — параметрический генератор коробок для 3D-печати",
+  tag: "ОФЛАЙН-ИНСТРУМЕНТ · v1.0",
+  intro: "Параметрическая коробка для 3D-печати. Задайте размеры — скачайте готовый бинарный STL. Работайте в миллиметрах или дюймах; STL всегда экспортируется в мм.",
+  g1: "Габариты", g2: "Стенки", g3: "Крышка", g4: "Перегородки", g5: "Паспорт детали",
+  mOuter: "Внешние", mInner: "Внутренние", uMetric: "Метрическая — мм", uImperial: "Имперская — дюймы",
+  f_len: "Длина <small>ось X</small>", f_wid: "Ширина <small>ось Y</small>", f_hgt: "Высота <small>ось Z</small>",
+  f_wall: "Толщина стенки", f_bot: "Толщина дна", f_rad: "Скругление углов <small>0 = острые</small>",
+  f_clr: "Зазор посадки <small>на сторону</small>", f_lip: "Высота бортика",
+  f_tor: "Высота торса <small>над стыком</small>", f_skirt: "Высота юбки <small>фартук по стенкам</small>",
+  f_lidT: "Толщина крышки",
+  f_zones: "Зоны <small>поровну</small>",
+  f_dvpx: "Позиции <small>в единицах длины или % от левой стенки; важнее зон</small>",
+  f_dvpy: "Позиции <small>в единицах длины или % от передней стенки; важнее зон</small>",
+  f_divh: "Высота <small>0 = на всю высоту</small>", f_divth: "Толщина",
+  ph_x: "напр. 40, 66%", ph_y: "напр. 25, 50%, 75%",
+  lid_none: "Нет", lid_inset: "Вкладная", lid_cap: "Колпачок", lid_hinge: "На петле", lid_slide: "Задвижная",
+  segHinge: "Петля", segLatch: "Замок",
+  segCross: "Поперечные — делят длину", segLength: "Продольные — делят ширину",
+  h_pip: "В сборе", h_pin: "Пруток", h_snap: "Защёлка",
+  l_flap: "Хлястик", l_tongue: "Язычок", l_none: "Нет",
+  hingeNote: "<b>В сборе</b>: одна деталь, напечатанная закрытой; оси выращены внутри шарниров с зазором 0,45 мм — первый поворот их освобождает; ориентация печати любая (например, с наклоном ~45°). <b>Пруток</b>: коробка и крышка печатаются раздельно и плоско; проденьте филамент 1,75 мм в канал ⌀2,1 и оплавьте концы. <b>Защёлка</b>: крышка один раз защёлкивается на стержни (держите её вертикально и нажмите вниз) и снимается только намеренно. Хлястик качается на выращенной мини-петле и виснет на зубе стенки; язычок защёлкивается на ребре передней стенки.",
+  slideNote: "Крышка задвигается в боковые пазы с торца; фрикционные бугорки удерживают её, планка-ручка помогает открыть. Обе детали печатаются плоско, без поддержек.",
+  w_walls: "Стенки съедают весь объём: внутри должно оставаться не меньше 1 мм.",
+  w_floor: "Дно почти достигает полной высоты: полость меньше 1 мм.",
+  w_clr: "Зазор крышки слишком велик — бортику не осталось места.",
+  w_lip: "Бортик крышки глубже полости коробки.",
+  w_capmin: "Колпачку нужна юбка не меньше 2 мм, чтобы держаться.",
+  w_capmax: "Юбка колпачка длиннее стенок коробки.",
+  w_hingelen: "Коробка слишком короткая для петли: нужно ≥ {0} мм по длине.",
+  w_flaplen: "Спереди не хватает прямого участка для хлястика (нужно ≥ 20 мм).",
+  w_hingeh: "Мало высоты для петли и замка: увеличьте высоту или уменьшите торс крышки.",
+  w_hingewall: "Для петли нужна стенка от 0,8 мм — тоньше перемычки не держатся.",
+  w_snaptor: "Петля-защёлка допускает торс крышки не выше {0} мм.",
+  w_slideh: "Мало высоты для задвижной крышки: под пазом остаётся меньше 3 мм полости.",
+  w_slidew: "Слишком узко для задвижной крышки (внутренняя ширина ≥ 8 мм).",
+  w_slidel: "Задвижной крышке нужна длина от 30 мм.",
+  w_divparse: "Не удалось прочитать часть позиций перегородок — используйте числа или проценты.",
+  w_divtight: "Есть зоны меньше 3 мм — измените позиции, количество или толщину.",
+  w_divparth: "Частичным перегородкам нужна высота не меньше 2 мм.",
+  s_outer: "наружный габарит", s_inside: "внутри", s_cap: "вместимость", s_zones: "зоны",
+  s_zonel: "размеры зон по длине", s_zonew: "размеры зон по ширине",
+  s_pbox: "пластик, коробка", s_ppart: "пластик, деталь", s_plid: "пластик, крышка", s_pcap: "пластик, колпачок",
+  s_pin: "ось петли", s_tri: "треугольников", s_fix: "исправьте параметры выше",
+  u_ml: "мл", u_floz: "fl oz", u_g: "г PLA", u_oz: "унц. PLA", filament: "филамента",
+  dl_box: "Скачать STL — коробка", dl_lid: "Скачать STL — крышка", dl_cap: "Скачать STL — колпачок", dl_both: "Скачать STL — коробка + крышка",
+  footer: "ЕДИНИЦЫ: ММ · ФОРМАТ: BINARY STL · РАБОТАЕТ БЕЗ СЕТИ",
+  hud_hint: "ПРЕВЬЮ · <b>тяните</b> — вращение · колесо — масштаб", hud_outer: "НАРУЖНЫЙ ГАБАРИТ",
+},
+};
+
+function T(k) { return (I18N[lang] && I18N[lang][k]) ?? I18N.en[k] ?? k; }
+
+// apply the current language to every static element
+function applyLang() {
+  document.documentElement.lang = I18N[lang].locale;
+  document.title = T("title");
+  $("hdrTag").textContent = T("tag");
+  document.querySelector("header p").innerHTML = T("intro");
+  document.querySelectorAll(".group-title").forEach((el, i) =>
+    el.innerHTML = `<span class="num">0${i + 1}</span> ${T("g" + (i + 1))}`);
+  const segs = {
+    modeSeg: ["mode", { outer: "mOuter", inner: "mInner" }],
+    unitSeg: ["unit", { mm: "uMetric", in: "uImperial" }],
+    lidSeg:  ["lid", { none: "lid_none", inset: "lid_inset", cap: "lid_cap", hinge: "lid_hinge", slide: "lid_slide" }],
+    hingeSeg:["hinge", { pip: "h_pip", pin: "h_pin", snap: "h_snap" }],
+    latchSeg:["latch", { flap: "l_flap", tongue: "l_tongue", none: "l_none" }],
+  };
+  for (const [segId, [attr, map]] of Object.entries(segs))
+    $(segId).querySelectorAll("button").forEach(b => b.textContent = T(map[b.dataset[attr]]));
+  const labels = {
+    len: "f_len", wid: "f_wid", hgt: "f_hgt", wall: "f_wall", bot: "f_bot", rad: "f_rad",
+    clr: "f_clr", lip: "f_lip", tor: "f_tor", skirt: "f_skirt", lidT: "f_lidT",
+    zx: "f_zones", zy: "f_zones", dvpx: "f_dvpx", dvpy: "f_dvpy",
+    dvhx: "f_divh", dvhy: "f_divh", dvtx: "f_divth", dvty: "f_divth",
+  };
+  document.querySelectorAll(".field").forEach(f => {
+    const inp = f.querySelector("input");
+    if (inp && labels[inp.id]) f.querySelector("label").innerHTML = T(labels[inp.id]);
+  });
+  $("dvpx").placeholder = T("ph_x");
+  $("dvpy").placeholder = T("ph_y");
+  const segLabels = ["segHinge", "segLatch", "segCross", "segLength"];
+  document.querySelectorAll(".seg-label").forEach((el, i) => el.textContent = T(segLabels[i]));
+  $("hingeNote").innerHTML = T("hingeNote");
+  $("slideNote").innerHTML = T("slideNote");
+  document.querySelector("footer").textContent = T("footer");
+  document.querySelector(".hud.tl").innerHTML = T("hud_hint");
+  document.querySelector(".hud.br").innerHTML = `${T("hud_outer")}<div class="dims" id="hudDims"></div>`;
+  syncLidUI();
+}
+
 function rebuild() {
   const raw = {
     len: val("len"), wid: val("wid"), hgt: val("hgt"),
@@ -1012,43 +1380,35 @@ function rebuild() {
   const zsy = zoneSizes(py.pos, 2*iy, raw.dvty);           // zone sizes along the width
 
   const warnings = [];
-  if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1)
-    warnings.push("The walls eat the entire volume: at least 1 mm must remain inside.");
-  if (H - raw.bottom < 1)
-    warnings.push("The floor almost reaches the full height: the cavity is under 1 mm.");
+  if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1) warnings.push(T("w_walls"));
+  if (H - raw.bottom < 1) warnings.push(T("w_floor"));
   if (lidType === "inset" && (L/2 - raw.wall - raw.clr < 0.5 || W/2 - raw.wall - raw.clr < 0.5))
-    warnings.push("The lid clearance is too large — no room left for the lip.");
-  if (lidType === "inset" && raw.lip > H - raw.bottom)
-    warnings.push("The lid lip is deeper than the box cavity.");
+    warnings.push(T("w_clr"));
+  if (lidType === "inset" && raw.lip > H - raw.bottom) warnings.push(T("w_lip"));
   if (lidType === "cap") {
-    if (raw.skirt < 2) warnings.push("A cap needs a skirt of at least 2 mm to hold on.");
-    if (raw.skirt > H - 1) warnings.push("The cap skirt is longer than the box walls.");
+    if (raw.skirt < 2) warnings.push(T("w_capmin"));
+    if (raw.skirt > H - 1) warnings.push(T("w_capmax"));
   }
   if (lidType === "hinge") {
     const need = hingeKind === "snap" ? 18 : 25;
     if (L - 2*Math.max(R, 2) - 4 < need)
-      warnings.push("The box is too short for the hinge: needs ≥ " + (need + 4 + 2*Math.max(R, 2)).toFixed(0) + " mm in length.");
-    if (latchKind === "flap" && L - 2*R < 20)
-      warnings.push("Not enough straight run at the front for the latch flap (needs ≥ 20 mm).");
-    if (H - raw.lidT - raw.tor - PH.lidGap < 12)
-      warnings.push("Too shallow for the hinge and latch: increase the height or reduce the lid body.");
-    if (raw.wall < 0.8) warnings.push("The hinge needs walls of at least 0.8 mm — thinner knuckle webs won't hold.");
+      warnings.push(T("w_hingelen").replace("{0}", (need + 4 + 2*Math.max(R, 2)).toFixed(0)));
+    if (latchKind === "flap" && L - 2*R < 20) warnings.push(T("w_flaplen"));
+    if (H - raw.lidT - raw.tor - PH.lidGap < 12) warnings.push(T("w_hingeh"));
+    if (raw.wall < 0.8) warnings.push(T("w_hingewall"));
     if (hingeKind === "snap" && raw.lidT + raw.tor > 6.5)
-      warnings.push("The snap-on hinge needs the lid body no taller than " + (6.5 - raw.lidT).toFixed(1) + " mm.");
+      warnings.push(T("w_snaptor").replace("{0}", (6.5 - raw.lidT).toFixed(1)));
   }
   if (lidType === "slide") {
-    if (H - SL.railT - raw.lidT - 2*raw.clr < raw.bottom + 3)
-      warnings.push("Too shallow for the sliding lid: the slot leaves under 3 mm of cavity.");
-    if (W - 2*raw.wall - 2*raw.clr < 8)
-      warnings.push("Too narrow for the sliding lid (needs ≥ 8 mm of inner width).");
-    if (L < 30) warnings.push("The sliding lid needs a length of 30 mm or more.");
+    if (H - SL.railT - raw.lidT - 2*raw.clr < raw.bottom + 3) warnings.push(T("w_slideh"));
+    if (W - 2*raw.wall - 2*raw.clr < 8) warnings.push(T("w_slidew"));
+    if (L < 30) warnings.push(T("w_slidel"));
   }
-  if (px.bad || py.bad)
-    warnings.push("Couldn't read some divider positions — use numbers or percentages.");
+  if (px.bad || py.bad) warnings.push(T("w_divparse"));
   if ((px.pos.length || py.pos.length) && Math.min(...zsx, ...zsy) < 3)
-    warnings.push("Divider zones come out smaller than 3 mm — adjust the positions, count, or thickness.");
+    warnings.push(T("w_divtight"));
   if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2))
-    warnings.push("Partial dividers need a height of at least 2 mm.");
+    warnings.push(T("w_divparth"));
 
   const ok = warnings.length === 0;
   let boxTris = [], lidTris = [];
@@ -1089,11 +1449,11 @@ function rebuild() {
   wEl.classList.toggle("show", warnings.length > 0);
 
   // data sheet
-  const fmt = (x, d = 1) => x.toLocaleString("en-US", { maximumFractionDigits: d });
+  const fmt = (x, d = 1) => x.toLocaleString(T("locale"), { maximumFractionDigits: d });
   const fmtL = (x, d) => unit === "in" ? fmt(x / IN, d ?? 2) : fmt(x, d ?? 1); // length in display units
   const plastic = v => unit === "in" // v in cm³ → volume · PLA weight
-    ? `${fmt(v / 16.387, 2)} <i>in³</i> · ${fmt(v * 1.24 / 28.35, 2)} <i>oz PLA</i>`
-    : `${fmt(v)} <i>cm³</i> · ${fmt(v * 1.24)} <i>g PLA</i>`;
+    ? `${fmt(v / 16.387, 2)} <i>in³</i> · ${fmt(v * 1.24 / 28.35, 2)} <i>${T("u_oz")}</i>`
+    : `${fmt(v)} <i>cm³</i> · ${fmt(v * 1.24)} <i>${T("u_g")}</i>`;
   let statsHtml = "";
   if (ok) {
     const volBox = meshVolume(boxTris) / 1000; // cm³
@@ -1101,35 +1461,34 @@ function rebuild() {
     const ri = Math.max(0, Math.min(R - raw.wall, Math.min(li, wi)/2));
     const innerH = H - raw.bottom - lidVsp;
     const capacity = (li*wi - (4 - Math.PI)*ri*ri) * innerH / 1000; // ml
-    const boxName = lidType === "hinge" && hingeKind === "pip" ? "plastic, part" : "plastic, box";
+    const boxName = lidType === "hinge" && hingeKind === "pip" ? T("s_ppart") : T("s_pbox");
     const rows = [
-      ["outer size", `${fmtL(L)}×${fmtL(W)}×${fmtL(H)} <i>${unit}</i>`],
-      ["inside", `${fmtL(li)}×${fmtL(wi)}×${fmtL(innerH)} <i>${unit}</i>`],
-      ["capacity", unit === "in" ? `≈ ${fmt(capacity / 29.5735, 1)} <i>fl oz</i>` : `≈ ${fmt(capacity, 0)} <i>ml</i>`],
+      [T("s_outer"), `${fmtL(L)}×${fmtL(W)}×${fmtL(H)} <i>${unit}</i>`],
+      [T("s_inside"), `${fmtL(li)}×${fmtL(wi)}×${fmtL(innerH)} <i>${unit}</i>`],
+      [T("s_cap"), unit === "in" ? `≈ ${fmt(capacity / 29.5735, 1)} <i>${T("u_floz")}</i>` : `≈ ${fmt(capacity, 0)} <i>${T("u_ml")}</i>`],
       [boxName, plastic(volBox)],
     ];
     if (px.pos.length || py.pos.length) {
-      rows.splice(2, 0, ["zones", `${px.pos.length + 1} × ${py.pos.length + 1}`]);
+      rows.splice(2, 0, [T("s_zones"), `${px.pos.length + 1} × ${py.pos.length + 1}`]);
       let at = 3;
       if (px.pos.length)
-        rows.splice(at++, 0, ["zone sizes, along L", `${zsx.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
+        rows.splice(at++, 0, [T("s_zonel"), `${zsx.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
       if (py.pos.length)
-        rows.splice(at++, 0, ["zone sizes, along W", `${zsy.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
+        rows.splice(at++, 0, [T("s_zonew"), `${zsy.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
     }
     if (lidTris.length) {
       const volLid = meshVolume(lidTris) / 1000;
-      const name = lidType === "cap" ? "plastic, cap" : "plastic, lid";
-      rows.push([name, plastic(volLid)]);
+      rows.push([lidType === "cap" ? T("s_pcap") : T("s_plid"), plastic(volLid)]);
     }
     if (lidType === "hinge" && hingeKind === "pin") {
       const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, "pin");
-      rows.push(["hinge pin", `⌀1.75 filament × ${fmtL(Math.ceil(g.HL + 4))} <i>${unit}</i>`]);
+      rows.push([T("s_pin"), `⌀1.75 ${T("filament")} × ${fmtL(Math.ceil(g.HL + 4))} <i>${unit}</i>`]);
     }
-    rows.push(["triangles", fmt(boxTris.length + lidTris.length, 0)]);
+    rows.push([T("s_tri"), fmt(boxTris.length + lidTris.length, 0)]);
     statsHtml = rows.map(([k, v]) =>
       `<div class="row"><span>${k}</span><span class="dots"></span><b>${v}</b></div>`).join("");
   } else {
-    statsHtml = `<div class="row"><span style="color:var(--err)">fix the parameters above</span></div>`;
+    statsHtml = `<div class="row"><span style="color:var(--err)">${T("s_fix")}</span></div>`;
   }
   $("stats").innerHTML = statsHtml;
 
@@ -1397,9 +1756,9 @@ function syncLidUI() {
   const single = lidType === "none" || (lidType === "hinge" && hingeKind === "pip");
   $("dlLid").style.display = single ? "none" : "";
   $("dlLid").querySelector("span").textContent =
-    lidType === "cap" ? "Download STL — cap" : "Download STL — lid";
+    lidType === "cap" ? T("dl_cap") : T("dl_lid");
   $("dlBox").querySelector("span").textContent =
-    lidType === "hinge" && hingeKind === "pip" ? "Download STL — box + lid" : "Download STL — box";
+    lidType === "hinge" && hingeKind === "pip" ? T("dl_both") : T("dl_box");
 }
 
 /* ═══════════════ shareable links & history ═══════════════
@@ -1500,7 +1859,19 @@ $("latchSeg").querySelectorAll("button").forEach(btn => {
   });
 });
 
+// language: saved choice, else the browser's language, else English
+lang = localStorage.getItem("boxstl.lang") ||
+  (["en", "fr", "de", "es", "zh", "ru"].find(l => (navigator.language || "en").startsWith(l)) || "en");
+$("langSel").value = lang;
+$("langSel").addEventListener("change", () => {
+  lang = $("langSel").value;
+  try { localStorage.setItem("boxstl.lang", lang); } catch {}
+  applyLang();
+  rebuild();
+});
+
 resize();
+applyLang();
 if (location.hash.length > 1) { fromHistory = true; applyState(location.hash.slice(1)); }
 else rebuild();
 requestAnimationFrame(render);

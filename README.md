@@ -23,6 +23,9 @@ JavaScript.
 - **Shareable links & history** — every setting lands in the URL hash, so a
   link reproduces the exact setup (including the unit system), and the
   browser's back/forward buttons walk through your parameter changes.
+- **Six languages** — English, French, German, Spanish, Chinese, and Russian,
+  including warnings and the data sheet, with locale-aware number formatting.
+  The choice is remembered; first visits follow the browser language.
 - **Five lid options:**
   - **None** — an open tray.
   - **Inset** — a lid with a hollow lip that drops inside the box. Friction
