@@ -432,6 +432,28 @@
       <div class="stepper" data-for="dvty"><button>−</button><input id="dvty" value="1.2" data-step="0.2" data-min="0.4"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
+    <div id="divRadial" style="display:none">
+      <div class="seg-label">Radial — split into sectors</div>
+      <div class="field">
+        <label>Sectors <small>equal split</small></label>
+        <div class="stepper" data-for="zr"><button>−</button><input id="zr" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
+        <span class="unit">×</span>
+      </div>
+      <div class="field col">
+        <label>Angles <small>degrees or % of the turn; overrides sectors</small></label>
+        <input class="txt deg" id="dvpr" placeholder="e.g. 0, 120, 240">
+      </div>
+      <div class="field">
+        <label>Height <small>0 = full height</small></label>
+        <div class="stepper" data-for="dvhr"><button>−</button><input id="dvhr" value="0" data-step="1" data-min="0"><button>+</button></div>
+        <span class="unit">mm</span>
+      </div>
+      <div class="field">
+        <label>Thickness</label>
+        <div class="stepper" data-for="dvtr"><button>−</button><input id="dvtr" value="1.2" data-step="0.2" data-min="0.4"><button>+</button></div>
+        <span class="unit">mm</span>
+      </div>
+    </div>
   </section>
 
   <div id="warnings"></div>
@@ -742,6 +764,37 @@ function parseDivPositions(txt, count, span) {
     for (let k = 1; k < count; k++) pos.push(span * k / count);
   }
   return { pos: pos.sort((a, b) => a - b), bad };
+}
+
+// Parse a radial divider angle list: degrees, or % of a full turn.
+// Empty text falls back to an equal split of `count` sectors (count ≥ 2).
+function parseAngles(txt, count) {
+  const ang = [];
+  let bad = false;
+  const custom = !!txt.trim();
+  if (custom) {
+    for (const tok of txt.trim().split(/[,;\s]+/)) {
+      if (!tok) continue;
+      const v = tok.endsWith("%") ? parseFloat(tok) * 3.6 : parseFloat(tok);
+      if (isFinite(v)) ang.push(v * Math.PI / 180); else bad = true;
+    }
+  } else if (count >= 2) {
+    for (let k = 0; k < count; k++) ang.push(2 * Math.PI * k / count);
+  }
+  return { ang: ang.sort((a, b) => a - b), bad, custom };
+}
+
+// Radial dividers in a cylinder: rotated spokes from the center, welded
+// into the wall with a bite that stays inside the outer radius
+function buildRadialDividers(D, wall, bottom, angles, top, dt) {
+  const T = [];
+  const rOut = D/2 - wall + Math.min(wall, 1.2);
+  for (const a of angles) {
+    const c = Math.cos(a), s = Math.sin(a);
+    T.push(...cuboid(0, rOut, -dt/2, dt/2, bottom - 0.4, top)
+      .map(t => t.map(p => [p[0]*c - p[1]*s, p[0]*s + p[1]*c, p[2]])));
+  }
+  return T;
 }
 
 // Clear (usable) zone sizes between walls and dividers of thickness dt
@@ -1066,6 +1119,10 @@ en: {
   mOuter: "Outer", mInner: "Inner", uMetric: "Metric — mm", uImperial: "Imperial — inches",
   shape_rect: "Rectangular", shape_cyl: "Cylindrical", f_dia: "Diameter",
   w_cyllid: "This lid type isn't available for cylindrical boxes — use inset or cap.",
+  segRadial: "Radial — split into sectors", f_sect: "Sectors <small>equal split</small>",
+  f_dvpr: "Angles <small>degrees or % of the turn; overrides sectors</small>",
+  ph_r: "e.g. 0, 120, 240", s_sect: "sectors",
+  w_sectight: "Sectors come out narrower than 3 mm at the rim — adjust the angles or count.",
   f_len: "Length <small>X axis</small>", f_wid: "Width <small>Y axis</small>", f_hgt: "Height <small>Z axis</small>",
   f_wall: "Wall thickness", f_bot: "Floor thickness", f_rad: "Corner radius <small>0 = sharp corners</small>",
   f_clr: "Fit clearance <small>per side</small>", f_lip: "Lip height",
@@ -1118,6 +1175,10 @@ fr: {
   mOuter: "Extérieures", mInner: "Intérieures", uMetric: "Métrique — mm", uImperial: "Impérial — pouces",
   shape_rect: "Rectangulaire", shape_cyl: "Cylindrique", f_dia: "Diamètre",
   w_cyllid: "Ce type de couvercle n'existe pas pour les boîtes cylindriques — utilisez encastré ou capuchon.",
+  segRadial: "Radiaux — secteurs", f_sect: "Secteurs <small>partage égal</small>",
+  f_dvpr: "Angles <small>degrés ou % du tour ; prioritaire sur les secteurs</small>",
+  ph_r: "ex. 0, 120, 240", s_sect: "secteurs",
+  w_sectight: "Des secteurs font moins de 3 mm au bord — ajustez les angles ou le nombre.",
   f_len: "Longueur <small>axe X</small>", f_wid: "Largeur <small>axe Y</small>", f_hgt: "Hauteur <small>axe Z</small>",
   f_wall: "Épaisseur des parois", f_bot: "Épaisseur du fond", f_rad: "Rayon des angles <small>0 = angles vifs</small>",
   f_clr: "Jeu d'ajustement <small>par côté</small>", f_lip: "Hauteur du rebord",
@@ -1170,6 +1231,10 @@ de: {
   mOuter: "Außen", mInner: "Innen", uMetric: "Metrisch — mm", uImperial: "Imperial — Zoll",
   shape_rect: "Rechteckig", shape_cyl: "Zylindrisch", f_dia: "Durchmesser",
   w_cyllid: "Dieser Deckeltyp ist für zylindrische Boxen nicht verfügbar — Einlege- oder Stülpdeckel wählen.",
+  segRadial: "Radial — Sektoren", f_sect: "Sektoren <small>gleichmäßig</small>",
+  f_dvpr: "Winkel <small>Grad oder % der Umdrehung; überschreibt Sektoren</small>",
+  ph_r: "z. B. 0, 120, 240", s_sect: "Sektoren",
+  w_sectight: "Sektoren werden am Rand schmaler als 3 mm — Winkel oder Anzahl anpassen.",
   f_len: "Länge <small>X-Achse</small>", f_wid: "Breite <small>Y-Achse</small>", f_hgt: "Höhe <small>Z-Achse</small>",
   f_wall: "Wandstärke", f_bot: "Bodenstärke", f_rad: "Eckenradius <small>0 = scharfe Ecken</small>",
   f_clr: "Passungsspiel <small>pro Seite</small>", f_lip: "Lippenhöhe",
@@ -1222,6 +1287,10 @@ es: {
   mOuter: "Exteriores", mInner: "Interiores", uMetric: "Métrico — mm", uImperial: "Imperial — pulgadas",
   shape_rect: "Rectangular", shape_cyl: "Cilíndrica", f_dia: "Diámetro",
   w_cyllid: "Este tipo de tapa no está disponible para cajas cilíndricas — usa encajada o exterior.",
+  segRadial: "Radiales — sectores", f_sect: "Sectores <small>partes iguales</small>",
+  f_dvpr: "Ángulos <small>grados o % de la vuelta; anula los sectores</small>",
+  ph_r: "p. ej. 0, 120, 240", s_sect: "sectores",
+  w_sectight: "Hay sectores de menos de 3 mm en el borde — ajusta los ángulos o el número.",
   f_len: "Longitud <small>eje X</small>", f_wid: "Anchura <small>eje Y</small>", f_hgt: "Altura <small>eje Z</small>",
   f_wall: "Grosor de pared", f_bot: "Grosor del fondo", f_rad: "Radio de esquinas <small>0 = esquinas vivas</small>",
   f_clr: "Holgura de ajuste <small>por lado</small>", f_lip: "Altura del labio",
@@ -1274,6 +1343,10 @@ zh: {
   mOuter: "外部尺寸", mInner: "内部尺寸", uMetric: "公制 — 毫米", uImperial: "英制 — 英寸",
   shape_rect: "矩形", shape_cyl: "圆柱形", f_dia: "直径",
   w_cyllid: "圆柱形盒子不支持此盖型——请选内嵌盖或套盖。",
+  segRadial: "径向 — 扇区分割", f_sect: "扇区 <small>均分</small>",
+  f_dvpr: "角度 <small>度数或整圈的 %；优先于扇区</small>",
+  ph_r: "例：0, 120, 240", s_sect: "扇区",
+  w_sectight: "扇区在边缘处窄于 3 mm——请调整角度或数量。",
   f_len: "长度 <small>X 轴</small>", f_wid: "宽度 <small>Y 轴</small>", f_hgt: "高度 <small>Z 轴</small>",
   f_wall: "壁厚", f_bot: "底厚", f_rad: "圆角半径 <small>0 = 直角</small>",
   f_clr: "配合间隙 <small>每侧</small>", f_lip: "内唇高度",
@@ -1326,6 +1399,10 @@ ru: {
   mOuter: "Внешние", mInner: "Внутренние", uMetric: "Метрическая — мм", uImperial: "Имперская — дюймы",
   shape_rect: "Прямоугольная", shape_cyl: "Цилиндр", f_dia: "Диаметр",
   w_cyllid: "Этот тип крышки недоступен для цилиндра — выберите вкладную или колпачок.",
+  segRadial: "Радиальные — деление на секторы", f_sect: "Секторы <small>поровну</small>",
+  f_dvpr: "Углы <small>в градусах или % оборота; важнее секторов</small>",
+  ph_r: "напр. 0, 120, 240", s_sect: "секторы",
+  w_sectight: "Секторы у кромки уже 3 мм — измените углы или количество.",
   f_len: "Длина <small>ось X</small>", f_wid: "Ширина <small>ось Y</small>", f_hgt: "Высота <small>ось Z</small>",
   f_wall: "Толщина стенки", f_bot: "Толщина дна", f_rad: "Скругление углов <small>0 = острые</small>",
   f_clr: "Зазор посадки <small>на сторону</small>", f_lip: "Высота бортика",
@@ -1396,6 +1473,7 @@ function applyLang() {
     clr: "f_clr", lip: "f_lip", tor: "f_tor", skirt: "f_skirt", lidT: "f_lidT",
     zx: "f_zones", zy: "f_zones", dvpx: "f_dvpx", dvpy: "f_dvpy",
     dvhx: "f_divh", dvhy: "f_divh", dvtx: "f_divth", dvty: "f_divth",
+    zr: "f_sect", dvpr: "f_dvpr", dvhr: "f_divh", dvtr: "f_divth",
   };
   document.querySelectorAll(".field").forEach(f => {
     const inp = f.querySelector("input");
@@ -1403,7 +1481,8 @@ function applyLang() {
   });
   $("dvpx").placeholder = T("ph_x");
   $("dvpy").placeholder = T("ph_y");
-  const segLabels = ["segHinge", "segLatch", "segCross", "segLength"];
+  $("dvpr").placeholder = T("ph_r");
+  const segLabels = ["segHinge", "segLatch", "segCross", "segLength", "segRadial"];
   document.querySelectorAll(".seg-label").forEach((el, i) => el.textContent = T(segLabels[i]));
   $("hingeNote").innerHTML = T("hingeNote");
   $("slideNote").innerHTML = T("slideNote");
@@ -1420,7 +1499,7 @@ function rebuild() {
     clr: val("clr"), lip: val("lip"), skirt: val("skirt"),
     lidT: val("lidT"), tor: val("tor"), zx: cnt("zx"), zy: cnt("zy"),
     dvhx: val("dvhx"), dvhy: val("dvhy"), dvtx: val("dvtx"), dvty: val("dvty"),
-    dia: val("dia"),
+    dia: val("dia"), zr: cnt("zr"), dvhr: val("dvhr"), dvtr: val("dvtr"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -1443,6 +1522,9 @@ function rebuild() {
   const py = parseDivPositions($("dvpy").value, ny, 2*iy); // lengthwise dividers
   const zsx = zoneSizes(px.pos, 2*ix, raw.dvtx);           // zone sizes along the length
   const zsy = zoneSizes(py.pos, 2*iy, raw.dvty);           // zone sizes along the width
+  const pr = shape === "cyl"                               // radial dividers (cylinders only)
+    ? parseAngles($("dvpr").value, Math.max(1, Math.round(raw.zr)))
+    : { ang: [], bad: false, custom: false };
 
   const warnings = [];
   if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1) warnings.push(T("w_walls"));
@@ -1471,10 +1553,16 @@ function rebuild() {
     if (W - 2*raw.wall - 2*raw.clr < 8) warnings.push(T("w_slidew"));
     if (L < 30) warnings.push(T("w_slidel"));
   }
-  if (px.bad || py.bad) warnings.push(T("w_divparse"));
+  if (px.bad || py.bad || pr.bad) warnings.push(T("w_divparse"));
   if ((px.pos.length || py.pos.length) && Math.min(...zsx, ...zsy) < 3)
     warnings.push(T("w_divtight"));
-  if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2))
+  if (pr.ang.length >= 2) { // sector width at the rim
+    const a = pr.ang, riC = L/2 - raw.wall;
+    let gmin = 2*Math.PI - (a[a.length - 1] - a[0]);
+    for (let i = 1; i < a.length; i++) gmin = Math.min(gmin, a[i] - a[i-1]);
+    if (gmin * riC - raw.dvtr < 3) warnings.push(T("w_sectight"));
+  }
+  if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2) || (raw.dvhr > 0 && raw.dvhr < 2))
     warnings.push(T("w_divparth"));
 
   const ok = warnings.length === 0;
@@ -1506,6 +1594,10 @@ function rebuild() {
       base.push(...buildDividers(L, W, raw.wall, raw.bottom,
         px.pos.map(o => -ix + o), topX, raw.dvtx, py.pos.map(o => -iy + o), topY, raw.dvty,
         shape === "cyl" ? L/2 - raw.wall : null));
+    }
+    if (pr.ang.length) {
+      const topR = raw.dvhr > 0 ? Math.min(raw.bottom + raw.dvhr, divTop) : divTop;
+      base.push(...buildRadialDividers(L, raw.wall, raw.bottom, pr.ang, topR, raw.dvtr));
     }
     boxTris = clean(base);
   }
@@ -1540,6 +1632,10 @@ function rebuild() {
       [T("s_cap"), unit === "in" ? `≈ ${fmt(capacity / 29.5735, 1)} <i>${T("u_floz")}</i>` : `≈ ${fmt(capacity, 0)} <i>${T("u_ml")}</i>`],
       [boxName, plastic(volBox)],
     ];
+    if (pr.ang.length >= 2)
+      rows.splice(2, 0, [T("s_sect"), pr.custom
+        ? pr.ang.map(a => Math.round(a * 180 / Math.PI) + "°").join(" / ")
+        : String(pr.ang.length)]);
     if (px.pos.length || py.pos.length) {
       rows.splice(2, 0, [T("s_zones"), `${px.pos.length + 1} × ${py.pos.length + 1}`]);
       let at = 3;
@@ -1789,6 +1885,7 @@ $("unitSeg").querySelectorAll("button").forEach(btn => {
       if (isFinite(cur)) inp.value = +(cur * f).toFixed(next === "in" ? 4 : 2);
     });
     document.querySelectorAll(".txt").forEach(inp => { // convert absolute tokens, keep %
+      if (inp.classList.contains("deg")) return;       // angle lists are unitless
       inp.value = inp.value.split(/([,;\s]+)/).map(tok => {
         if (!tok || /^[,;\s]+$/.test(tok) || tok.endsWith("%")) return tok;
         const v = parseFloat(tok);
@@ -1824,6 +1921,7 @@ function syncShapeUI() {
   $("fLen").style.display = cyl ? "none" : "";
   $("fWid").style.display = cyl ? "none" : "";
   $("fRad").style.display = cyl ? "none" : "";
+  $("divRadial").style.display = cyl ? "" : "none";
   $("lidSeg").querySelectorAll("button").forEach(b => {
     const na = cyl && (b.dataset.lid === "hinge" || b.dataset.lid === "slide");
     b.disabled = na;
@@ -1873,7 +1971,7 @@ function syncLidUI() {
    back/forward buttons walk the parameter history. */
 
 const INPUT_IDS = ["len","wid","hgt","dia","wall","bot","rad","clr","lip","skirt","tor","lidT",
-                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty"];
+                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty","zr","dvpr","dvhr","dvtr"];
 const DEF = {
   unit: "mm", mode: "outer", shape: "rect", lid: "none", hinge: "pip", latch: "flap",
   inputs: Object.fromEntries(INPUT_IDS.map(id => [id, $(id).value])),

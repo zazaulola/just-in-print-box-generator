@@ -14,6 +14,9 @@ JavaScript.
   with four radial friction bumps, dividers become chords that stay inside
   the round wall, and wall smoothness adapts to the radius (up to a 96-gon).
   Hinged and sliding lids need straight walls and are disabled for cylinders.
+- **Radial dividers** — cylinders can also be split into pie sectors: an
+  equal count, or explicit spoke angles in degrees or % of the turn
+  (e.g. `0, 120, 240`), with their own height and thickness.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness.
 - **Dividers** — split the cavity into zones along both axes: an equal split
