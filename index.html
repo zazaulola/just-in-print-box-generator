@@ -281,12 +281,21 @@
       <button data-unit="mm" class="on">Metric — mm</button>
       <button data-unit="in">Imperial — inches</button>
     </div>
-    <div class="field">
+    <div class="seg" id="shapeSeg" style="margin-top:-6px">
+      <button data-shape="rect" class="on">Rectangular</button>
+      <button data-shape="cyl">Cylindrical</button>
+    </div>
+    <div class="field" id="fDia" style="display:none">
+      <label>Diameter</label>
+      <div class="stepper" data-for="dia"><button>−</button><input id="dia" value="80" data-step="1" data-min="1"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
+    <div class="field" id="fLen">
       <label>Length <small>X axis</small></label>
       <div class="stepper" data-for="len"><button>−</button><input id="len" value="120" data-step="1" data-min="1"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
-    <div class="field">
+    <div class="field" id="fWid">
       <label>Width <small>Y axis</small></label>
       <div class="stepper" data-for="wid"><button>−</button><input id="wid" value="80" data-step="1" data-min="1"><button>+</button></div>
       <span class="unit">mm</span>
@@ -310,7 +319,7 @@
       <div class="stepper" data-for="bot"><button>−</button><input id="bot" value="1.6" data-step="0.2" data-min="0.2"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
-    <div class="field">
+    <div class="field" id="fRad">
       <label>Corner radius <small>0 = sharp corners</small></label>
       <div class="stepper" data-for="rad"><button>−</button><input id="rad" value="4" data-step="0.5" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
@@ -456,9 +465,14 @@
 
 const SEG = 10; // segments per rounded corner
 
+// Arc resolution grows with the radius (cylindrical boxes need smooth
+// walls); each builder picks one value per shell so outlines stitch 1:1.
+function segFor(r) { return Math.max(SEG, Math.min(24, Math.round(r * 0.8))); }
+
 // Rounded-rectangle outline, counterclockwise (seen from +Z).
-// Always 4*(SEG+1) points so outer and inner outlines stitch 1:1.
-function outline(hx, hy, r) {
+// Always 4*(n+1) points so same-n outer and inner outlines stitch 1:1.
+// A full circle is the degenerate case hx = hy = r.
+function outline(hx, hy, r, n = SEG) {
   r = Math.max(0, Math.min(r, Math.min(hx, hy) - 1e-4));
   const pts = [];
   const corners = [
@@ -468,8 +482,8 @@ function outline(hx, hy, r) {
     [ hx - r,   -(hy - r), 270],
   ];
   for (const [cx, cy, a0] of corners) {
-    for (let i = 0; i <= SEG; i++) {
-      const a = (a0 + 90 * i / SEG) * Math.PI / 180;
+    for (let i = 0; i <= n; i++) {
+      const a = (a0 + 90 * i / n) * Math.PI / 180;
       pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
     }
   }
@@ -479,8 +493,9 @@ function outline(hx, hy, r) {
 // Open tub with a sloped rim: wall height runs linearly from hF (front,
 // y=−W/2) to hB (back, y=+W/2). A regular box is the special case hF = hB.
 function buildTub(L, W, hF, hB, wall, bottom, R) {
-  const outer = outline(L / 2, W / 2, R);
-  const inner = outline(L / 2 - wall, W / 2 - wall, Math.max(R - wall, 0));
+  const ns = segFor(R);
+  const outer = outline(L / 2, W / 2, R, ns);
+  const inner = outline(L / 2 - wall, W / 2 - wall, Math.max(R - wall, 0), ns);
   const n = outer.length, T = [];
   const h = p => hF + (p[1] + W / 2) / W * (hB - hF);
   const v = (p, z) => [p[0], p[1], z];
@@ -539,6 +554,25 @@ function buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
       const ry = W/2 + clr, zc = lidT + tor + skirt/2;
       T.push(...halfRoundRidgeX(-xr, xr, ry + 0.15, zc, rr, -1));
       T.push(...halfRoundRidgeX(-xr, xr, -(ry + 0.15), zc, rr, 1));
+    }
+  }
+  // circular lids have no straight runs — grip with four radial bumps
+  // (0.15 mm of press) at the compass points instead
+  const round = L === W && R >= L/2 - 0.05;
+  if (round && L >= 24) {
+    const bumps = (rIn, rOut, zc, zh) => [
+      ...cuboid(-3, 3, rIn, rOut, zc - zh, zc + zh),
+      ...cuboid(-3, 3, -rOut, -rIn, zc - zh, zc + zh),
+      ...cuboid(rIn, rOut, -3, 3, zc - zh, zc + zh),
+      ...cuboid(-rOut, -rIn, -3, 3, zc - zh, zc + zh),
+    ];
+    if (lipH > 2.2) {
+      const rl = L/2 - wall - clr; // lip outer face radius
+      T.push(...bumps(rl - 0.5, rl + clr + 0.15, lidT + tor + lipH/2, Math.min(2, lipH/2 - 0.3)));
+    }
+    if (skirt > 2.2) {
+      const rs = L/2 + clr;        // skirt inner face radius
+      T.push(...bumps(L/2 - 0.15, rs + 0.5, lidT + tor + skirt/2, Math.min(2, skirt/2 - 0.3)));
     }
   }
   return T;
@@ -610,8 +644,9 @@ function tubeX(x0, x1, cy, cz, ro, ri, res) {
 
 // closed rectangular wall band (a rim ring of thickness t between z0..z1)
 function wallBand(L, W, R, t, z0, z1) {
-  const A = outline(L/2, W/2, R);
-  const B = outline(L/2 - t, W/2 - t, Math.max(R - t, 0));
+  const ns = segFor(R);
+  const A = outline(L/2, W/2, R, ns);
+  const B = outline(L/2 - t, W/2 - t, Math.max(R - t, 0), ns);
   const n = A.length, T = [];
   const v = (p, z) => [p[0], p[1], z];
   const quad = (a, b, c, d) => T.push([a, b, c], [a, c, d]);
@@ -671,13 +706,23 @@ function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
 /* ── dividers: split the cavity into zones ──
    xs — crosswise divider centerlines (absolute x), topX — their top;
    ys — lengthwise divider centerlines (absolute y), topY — their top. */
-function buildDividers(L, W, wall, bottom, xs, topX, dtX, ys, topY, dtY) {
+function buildDividers(L, W, wall, bottom, xs, topX, dtX, ys, topY, dtY, cylRi) {
   const T = [];
   const ix = L/2 - wall, iy = W/2 - wall;
-  for (const x of xs)
-    T.push(...cuboid(x - dtX/2, x + dtX/2, -iy - 0.4, iy + 0.4, bottom - 0.4, topX));
-  for (const y of ys)
-    T.push(...cuboid(-ix - 0.4, ix + 0.4, y - dtY/2, y + dtY/2, bottom - 0.4, topY));
+  const bite = Math.min(wall, 1.2);
+  // in a cylinder each divider is a chord: its half-span follows the circle
+  // (plus a weld bite that stays inside the outer wall)
+  const half = (off, dt, straight) => cylRi
+    ? Math.sqrt(Math.max(cylRi*cylRi - Math.pow(Math.abs(off) + dt/2, 2), 0)) + bite
+    : straight + 0.4;
+  for (const x of xs) {
+    const h = half(x, dtX, iy);
+    T.push(...cuboid(x - dtX/2, x + dtX/2, -h, h, bottom - 0.4, topX));
+  }
+  for (const y of ys) {
+    const h = half(y, dtY, ix);
+    T.push(...cuboid(-h, h, y - dtY/2, y + dtY/2, bottom - 0.4, topY));
+  }
   return T;
 }
 
@@ -827,7 +872,7 @@ function hingeLayout(L, W, H, R, lidT, tor, kind) {
 
 // solid rounded-corner plate (the lid)
 function plate(L, W, R, th) {
-  const A = outline(L/2, W/2, R);
+  const A = outline(L/2, W/2, R, segFor(R));
   const n = A.length, T = [];
   const v = (p, z) => [p[0], p[1], z];
   for (let i = 0; i < n; i++) {
@@ -992,6 +1037,7 @@ function toSTL(tris, name) {
 
 const $ = id => document.getElementById(id);
 let mode = "outer";
+let shape = "rect";      // rect | cyl
 let unit = "mm";         // mm | in — display only; geometry and STL stay in mm
 let lidType = "none";    // none | inset | cap | hinge | slide
 let hingeKind = "pip";   // pip | pin | snap
@@ -1018,6 +1064,8 @@ en: {
   intro: "A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.",
   g1: "Dimensions", g2: "Walls", g3: "Lid", g4: "Dividers", g5: "Data sheet",
   mOuter: "Outer", mInner: "Inner", uMetric: "Metric — mm", uImperial: "Imperial — inches",
+  shape_rect: "Rectangular", shape_cyl: "Cylindrical", f_dia: "Diameter",
+  w_cyllid: "This lid type isn't available for cylindrical boxes — use inset or cap.",
   f_len: "Length <small>X axis</small>", f_wid: "Width <small>Y axis</small>", f_hgt: "Height <small>Z axis</small>",
   f_wall: "Wall thickness", f_bot: "Floor thickness", f_rad: "Corner radius <small>0 = sharp corners</small>",
   f_clr: "Fit clearance <small>per side</small>", f_lip: "Lip height",
@@ -1068,6 +1116,8 @@ fr: {
   intro: "Une boîte paramétrique pour l'impression 3D. Réglez les dimensions et téléchargez un STL binaire prêt à trancher. Travaillez en millimètres ou en pouces ; le STL est toujours exporté en mm.",
   g1: "Dimensions", g2: "Parois", g3: "Couvercle", g4: "Séparateurs", g5: "Fiche technique",
   mOuter: "Extérieures", mInner: "Intérieures", uMetric: "Métrique — mm", uImperial: "Impérial — pouces",
+  shape_rect: "Rectangulaire", shape_cyl: "Cylindrique", f_dia: "Diamètre",
+  w_cyllid: "Ce type de couvercle n'existe pas pour les boîtes cylindriques — utilisez encastré ou capuchon.",
   f_len: "Longueur <small>axe X</small>", f_wid: "Largeur <small>axe Y</small>", f_hgt: "Hauteur <small>axe Z</small>",
   f_wall: "Épaisseur des parois", f_bot: "Épaisseur du fond", f_rad: "Rayon des angles <small>0 = angles vifs</small>",
   f_clr: "Jeu d'ajustement <small>par côté</small>", f_lip: "Hauteur du rebord",
@@ -1118,6 +1168,8 @@ de: {
   intro: "Eine parametrische Box für den 3D-Druck. Maße einstellen — druckfertiges binäres STL herunterladen. In Millimetern oder Zoll arbeiten; das STL wird immer in mm exportiert.",
   g1: "Abmessungen", g2: "Wände", g3: "Deckel", g4: "Trennwände", g5: "Datenblatt",
   mOuter: "Außen", mInner: "Innen", uMetric: "Metrisch — mm", uImperial: "Imperial — Zoll",
+  shape_rect: "Rechteckig", shape_cyl: "Zylindrisch", f_dia: "Durchmesser",
+  w_cyllid: "Dieser Deckeltyp ist für zylindrische Boxen nicht verfügbar — Einlege- oder Stülpdeckel wählen.",
   f_len: "Länge <small>X-Achse</small>", f_wid: "Breite <small>Y-Achse</small>", f_hgt: "Höhe <small>Z-Achse</small>",
   f_wall: "Wandstärke", f_bot: "Bodenstärke", f_rad: "Eckenradius <small>0 = scharfe Ecken</small>",
   f_clr: "Passungsspiel <small>pro Seite</small>", f_lip: "Lippenhöhe",
@@ -1168,6 +1220,8 @@ es: {
   intro: "Una caja paramétrica para impresión 3D. Define las dimensiones y descarga un STL binario listo para laminar. Trabaja en milímetros o pulgadas; el STL siempre se exporta en mm.",
   g1: "Dimensiones", g2: "Paredes", g3: "Tapa", g4: "Divisores", g5: "Ficha técnica",
   mOuter: "Exteriores", mInner: "Interiores", uMetric: "Métrico — mm", uImperial: "Imperial — pulgadas",
+  shape_rect: "Rectangular", shape_cyl: "Cilíndrica", f_dia: "Diámetro",
+  w_cyllid: "Este tipo de tapa no está disponible para cajas cilíndricas — usa encajada o exterior.",
   f_len: "Longitud <small>eje X</small>", f_wid: "Anchura <small>eje Y</small>", f_hgt: "Altura <small>eje Z</small>",
   f_wall: "Grosor de pared", f_bot: "Grosor del fondo", f_rad: "Radio de esquinas <small>0 = esquinas vivas</small>",
   f_clr: "Holgura de ajuste <small>por lado</small>", f_lip: "Altura del labio",
@@ -1218,6 +1272,8 @@ zh: {
   intro: "面向 3D 打印的参数化盒子。设定尺寸，下载可直接切片的二进制 STL。可用毫米或英寸；STL 始终以 mm 导出。",
   g1: "尺寸", g2: "壁", g3: "盖子", g4: "隔板", g5: "参数表",
   mOuter: "外部尺寸", mInner: "内部尺寸", uMetric: "公制 — 毫米", uImperial: "英制 — 英寸",
+  shape_rect: "矩形", shape_cyl: "圆柱形", f_dia: "直径",
+  w_cyllid: "圆柱形盒子不支持此盖型——请选内嵌盖或套盖。",
   f_len: "长度 <small>X 轴</small>", f_wid: "宽度 <small>Y 轴</small>", f_hgt: "高度 <small>Z 轴</small>",
   f_wall: "壁厚", f_bot: "底厚", f_rad: "圆角半径 <small>0 = 直角</small>",
   f_clr: "配合间隙 <small>每侧</small>", f_lip: "内唇高度",
@@ -1268,6 +1324,8 @@ ru: {
   intro: "Параметрическая коробка для 3D-печати. Задайте размеры — скачайте готовый бинарный STL. Работайте в миллиметрах или дюймах; STL всегда экспортируется в мм.",
   g1: "Габариты", g2: "Стенки", g3: "Крышка", g4: "Перегородки", g5: "Паспорт детали",
   mOuter: "Внешние", mInner: "Внутренние", uMetric: "Метрическая — мм", uImperial: "Имперская — дюймы",
+  shape_rect: "Прямоугольная", shape_cyl: "Цилиндр", f_dia: "Диаметр",
+  w_cyllid: "Этот тип крышки недоступен для цилиндра — выберите вкладную или колпачок.",
   f_len: "Длина <small>ось X</small>", f_wid: "Ширина <small>ось Y</small>", f_hgt: "Высота <small>ось Z</small>",
   f_wall: "Толщина стенки", f_bot: "Толщина дна", f_rad: "Скругление углов <small>0 = острые</small>",
   f_clr: "Зазор посадки <small>на сторону</small>", f_lip: "Высота бортика",
@@ -1326,6 +1384,7 @@ function applyLang() {
   const segs = {
     modeSeg: ["mode", { outer: "mOuter", inner: "mInner" }],
     unitSeg: ["unit", { mm: "uMetric", in: "uImperial" }],
+    shapeSeg: ["shape", { rect: "shape_rect", cyl: "shape_cyl" }],
     lidSeg:  ["lid", { none: "lid_none", inset: "lid_inset", cap: "lid_cap", hinge: "lid_hinge", slide: "lid_slide" }],
     hingeSeg:["hinge", { pip: "h_pip", pin: "h_pin", snap: "h_snap" }],
     latchSeg:["latch", { flap: "l_flap", tongue: "l_tongue", none: "l_none" }],
@@ -1333,7 +1392,7 @@ function applyLang() {
   for (const [segId, [attr, map]] of Object.entries(segs))
     $(segId).querySelectorAll("button").forEach(b => b.textContent = T(map[b.dataset[attr]]));
   const labels = {
-    len: "f_len", wid: "f_wid", hgt: "f_hgt", wall: "f_wall", bot: "f_bot", rad: "f_rad",
+    len: "f_len", wid: "f_wid", hgt: "f_hgt", dia: "f_dia", wall: "f_wall", bot: "f_bot", rad: "f_rad",
     clr: "f_clr", lip: "f_lip", tor: "f_tor", skirt: "f_skirt", lidT: "f_lidT",
     zx: "f_zones", zy: "f_zones", dvpx: "f_dvpx", dvpy: "f_dvpy",
     dvhx: "f_divh", dvhy: "f_divh", dvtx: "f_divth", dvty: "f_divth",
@@ -1361,6 +1420,7 @@ function rebuild() {
     clr: val("clr"), lip: val("lip"), skirt: val("skirt"),
     lidT: val("lidT"), tor: val("tor"), zx: cnt("zx"), zy: cnt("zy"),
     dvhx: val("dvhx"), dvhy: val("dvhy"), dvtx: val("dvtx"), dvty: val("dvty"),
+    dia: val("dia"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -1369,9 +1429,14 @@ function rebuild() {
   const lidVsp = lidType === "hinge" ? raw.lidT + raw.tor + PH.lidGap
                : lidType === "slide" ? SL.railT + raw.lidT + 2*raw.clr
                : 0;
-  let L, W, H, R;
-  if (mode === "outer") { L = raw.len; W = raw.wid; H = raw.hgt; R = raw.rad; }
-  else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; H = raw.hgt + raw.bottom + lidVsp; R = raw.rad + raw.wall; }
+  let L, W, R;
+  const H = mode === "outer" ? raw.hgt : raw.hgt + raw.bottom + lidVsp;
+  if (shape === "cyl") {
+    // a cylinder is the degenerate rounded rectangle: L = W = D, R = D/2
+    const D = mode === "outer" ? raw.dia : raw.dia + 2*raw.wall;
+    L = W = D; R = D / 2;
+  } else if (mode === "outer") { L = raw.len; W = raw.wid; R = raw.rad; }
+  else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; R = raw.rad + raw.wall; }
   const nx = Math.max(1, Math.round(raw.zx)), ny = Math.max(1, Math.round(raw.zy));
   const ix = L/2 - raw.wall, iy = W/2 - raw.wall;
   const px = parseDivPositions($("dvpx").value, nx, 2*ix); // crosswise dividers
@@ -1389,6 +1454,8 @@ function rebuild() {
     if (raw.skirt < 2) warnings.push(T("w_capmin"));
     if (raw.skirt > H - 1) warnings.push(T("w_capmax"));
   }
+  if (shape === "cyl" && (lidType === "hinge" || lidType === "slide"))
+    warnings.push(T("w_cyllid"));
   if (lidType === "hinge") {
     const need = hingeKind === "snap" ? 18 : 25;
     if (L - 2*Math.max(R, 2) - 4 < need)
@@ -1437,7 +1504,8 @@ function rebuild() {
       const topX = raw.dvhx > 0 ? Math.min(raw.bottom + raw.dvhx, divTop) : divTop;
       const topY = raw.dvhy > 0 ? Math.min(raw.bottom + raw.dvhy, divTop) : divTop;
       base.push(...buildDividers(L, W, raw.wall, raw.bottom,
-        px.pos.map(o => -ix + o), topX, raw.dvtx, py.pos.map(o => -iy + o), topY, raw.dvty));
+        px.pos.map(o => -ix + o), topX, raw.dvtx, py.pos.map(o => -iy + o), topY, raw.dvty,
+        shape === "cyl" ? L/2 - raw.wall : null));
     }
     boxTris = clean(base);
   }
@@ -1463,8 +1531,12 @@ function rebuild() {
     const capacity = (li*wi - (4 - Math.PI)*ri*ri) * innerH / 1000; // ml
     const boxName = lidType === "hinge" && hingeKind === "pip" ? T("s_ppart") : T("s_pbox");
     const rows = [
-      [T("s_outer"), `${fmtL(L)}×${fmtL(W)}×${fmtL(H)} <i>${unit}</i>`],
-      [T("s_inside"), `${fmtL(li)}×${fmtL(wi)}×${fmtL(innerH)} <i>${unit}</i>`],
+      [T("s_outer"), shape === "cyl"
+        ? `⌀${fmtL(L)} × ${fmtL(H)} <i>${unit}</i>`
+        : `${fmtL(L)}×${fmtL(W)}×${fmtL(H)} <i>${unit}</i>`],
+      [T("s_inside"), shape === "cyl"
+        ? `⌀${fmtL(li)} × ${fmtL(innerH)} <i>${unit}</i>`
+        : `${fmtL(li)}×${fmtL(wi)}×${fmtL(innerH)} <i>${unit}</i>`],
       [T("s_cap"), unit === "in" ? `≈ ${fmt(capacity / 29.5735, 1)} <i>${T("u_floz")}</i>` : `≈ ${fmt(capacity, 0)} <i>${T("u_ml")}</i>`],
       [boxName, plastic(volBox)],
     ];
@@ -1492,7 +1564,9 @@ function rebuild() {
   }
   $("stats").innerHTML = statsHtml;
 
-  $("hudDims").textContent = ok ? `${fmtL(L)} × ${fmtL(W)} × ${fmtL(H)} ${unit}` : "—";
+  $("hudDims").textContent = ok
+    ? (shape === "cyl" ? `⌀${fmtL(L)} × ${fmtL(H)} ${unit}` : `${fmtL(L)} × ${fmtL(W)} × ${fmtL(H)} ${unit}`)
+    : "—";
   $("dlBox").disabled = !ok;
   $("dlLid").disabled = !ok;
 
@@ -1510,7 +1584,9 @@ function download(buf, name) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-const dimTag = () => `${Math.round(model.L)}x${Math.round(model.W)}x${Math.round(model.H)}`;
+const dimTag = () => shape === "cyl"
+  ? `d${Math.round(model.L)}x${Math.round(model.H)}`
+  : `${Math.round(model.L)}x${Math.round(model.W)}x${Math.round(model.H)}`;
 $("dlBox").addEventListener("click", () => {
   if (!model?.ok) return;
   const name = lidType === "hinge" ? "box_hinged" : lidType === "slide" ? "box_slide" : "box";
@@ -1740,6 +1816,36 @@ $("modeSeg").querySelectorAll("button").forEach(btn => {
   });
 });
 
+// box shape switch: cylinder hides L/W/corner fields and rules out
+// the hinged and sliding lids (they need straight walls)
+function syncShapeUI() {
+  const cyl = shape === "cyl";
+  $("fDia").style.display = cyl ? "" : "none";
+  $("fLen").style.display = cyl ? "none" : "";
+  $("fWid").style.display = cyl ? "none" : "";
+  $("fRad").style.display = cyl ? "none" : "";
+  $("lidSeg").querySelectorAll("button").forEach(b => {
+    const na = cyl && (b.dataset.lid === "hinge" || b.dataset.lid === "slide");
+    b.disabled = na;
+    b.style.opacity = na ? .35 : "";
+    b.style.cursor = na ? "not-allowed" : "";
+  });
+}
+$("shapeSeg").querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.shape === shape) return;
+    shape = btn.dataset.shape;
+    setSeg("shapeSeg", "shape", shape);
+    if (shape === "cyl" && (lidType === "hinge" || lidType === "slide")) {
+      lidType = "inset";
+      setSeg("lidSeg", "lid", lidType);
+      syncLidUI();
+    }
+    syncShapeUI();
+    rebuild();
+  });
+});
+
 // lid type: which fields are visible for each option
 const LID_FIELDS = {
   none:  [],
@@ -1766,10 +1872,10 @@ function syncLidUI() {
    entry per pause), so links reproduce the exact setup and the browser's
    back/forward buttons walk the parameter history. */
 
-const INPUT_IDS = ["len","wid","hgt","wall","bot","rad","clr","lip","skirt","tor","lidT",
+const INPUT_IDS = ["len","wid","hgt","dia","wall","bot","rad","clr","lip","skirt","tor","lidT",
                    "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty"];
 const DEF = {
-  unit: "mm", mode: "outer", lid: "none", hinge: "pip", latch: "flap",
+  unit: "mm", mode: "outer", shape: "rect", lid: "none", hinge: "pip", latch: "flap",
   inputs: Object.fromEntries(INPUT_IDS.map(id => [id, $(id).value])),
 };
 
@@ -1785,6 +1891,7 @@ function stateQS() { // only values that differ from the defaults
   const p = new URLSearchParams();
   if (unit !== DEF.unit) p.set("u", unit);
   if (mode !== DEF.mode) p.set("m", mode);
+  if (shape !== DEF.shape) p.set("s", shape);
   if (lidType !== DEF.lid) p.set("lid", lidType);
   if (lidType === "hinge") {
     if (hingeKind !== DEF.hinge) p.set("h", hingeKind);
@@ -1814,18 +1921,21 @@ function applyState(qs) {
   const get = (k, d) => p.has(k) ? p.get(k) : d;
   unit = get("u", DEF.unit) === "in" ? "in" : "mm";
   mode = get("m", DEF.mode);
+  shape = get("s", DEF.shape) === "cyl" ? "cyl" : "rect";
   lidType = get("lid", DEF.lid);
   hingeKind = get("h", DEF.hinge);
   latchKind = get("lt", DEF.latch);
   for (const id of INPUT_IDS) $(id).value = p.has(id) ? p.get(id) : defVal(id);
   setSeg("unitSeg", "unit", unit);
   setSeg("modeSeg", "mode", mode);
+  setSeg("shapeSeg", "shape", shape);
   setSeg("lidSeg", "lid", lidType);
   setSeg("hingeSeg", "hinge", hingeKind);
   setSeg("latchSeg", "latch", latchKind);
   document.querySelectorAll(".unit").forEach(u => {
     if (u.textContent === "mm" || u.textContent === "in") u.textContent = unit;
   });
+  syncShapeUI();
   syncLidUI();
   rebuild();
 }

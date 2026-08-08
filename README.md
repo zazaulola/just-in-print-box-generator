@@ -9,8 +9,13 @@ JavaScript.
 
 ## Features
 
+- **Two shapes** — rectangular (with corner radius, 0 = sharp) or cylindrical
+  (by diameter). Cylinders reuse the whole machinery: inset and cap lids grip
+  with four radial friction bumps, dividers become chords that stay inside
+  the round wall, and wall smoothness adapts to the radius (up to a 96-gon).
+  Hinged and sliding lids need straight walls and are disabled for cylinders.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
-  inner mode), wall/floor thickness, corner radius (0 = sharp corners).
+  inner mode), wall/floor thickness.
 - **Dividers** — split the cavity into zones along both axes: an equal split
   by zone count, or explicit divider positions in length units or % of the
   inner span (e.g. `40, 66%`). Crosswise and lengthwise dividers take
