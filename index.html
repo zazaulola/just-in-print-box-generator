@@ -334,6 +334,7 @@
       <button data-lid="cap">Cap</button>
       <button data-lid="hinge">Hinged</button>
       <button data-lid="slide">Sliding</button>
+      <button data-lid="screw">Screw</button>
     </div>
     <div id="hingeOpts" style="display:none">
       <div class="seg-label">Hinge</div>
@@ -369,6 +370,11 @@
       <div class="stepper" data-for="skirt"><button>−</button><input id="skirt" value="0" data-step="0.5" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
+    <div class="field" id="fThr" style="display:none">
+      <label>Thread height</label>
+      <div class="stepper" data-for="thr"><button>−</button><input id="thr" value="8" data-step="0.5" data-min="6"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
     <div class="field" id="fLidT" style="display:none">
       <label>Lid thickness</label>
       <div class="stepper" data-for="lidT"><button>−</button><input id="lidT" value="1.6" data-step="0.2" data-min="0.4"><button>+</button></div>
@@ -387,6 +393,11 @@
     <div class="hint" id="slideNote" style="display:none">
       The lid slides into side slots from one end; friction bumps hold it shut
       and a grip bar helps pull it open. Both parts print flat, no supports.
+    </div>
+    <div class="hint" id="screwNote" style="display:none">
+      A jar-style screw cap: 2-start trapezoidal thread (4.5 mm pitch, 45°
+      flanks) closes in about half a turn. Both parts print flat without
+      supports; the fit clearance sets how freely the thread runs.
     </div>
   </section>
 
@@ -723,6 +734,70 @@ function arcWallZ(cx, cy, ro, ri, a0, a1, z0, z1, segs) {
 /* ── cap lid: shell with a skirt worn over the box from above ── */
 function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
   return buildLidShell(L, W, wall, R, clr, 0, lidT, tor, skirt);
+}
+
+/* ── screw lid (cylinders): jar-style 2-start trapezoidal thread ──
+   45° flanks print support-free in both orientations; the male ridge
+   rides in the helical gap between the female ridge turns, with the
+   fit clearance applied radially and ~0.25 mm axially by profile. */
+const THR = { pitch: 4.5, starts: 2, d: 1.2, wr: 3.2, wc: 0.8, res: 48 };
+
+// Closed helical ridge: a trapezoid profile (root width wr → crest wc,
+// radius rRoot → rCrest) swept along a helix. Works outward or inward.
+function helixRidge(rRoot, rCrest, wr, wc, z0, lead, turns, phase) {
+  let prof = [[rRoot, -wr/2], [rCrest, -wc/2], [rCrest, wc/2], [rRoot, wr/2]];
+  if (rCrest < rRoot) prof.reverse(); // inward ridge: keep faces outward
+  const steps = Math.max(4, Math.round(turns * THR.res));
+  const T = [];
+  const ring = k => {
+    const t = turns * k / steps;
+    const a = phase + 2 * Math.PI * t, z = z0 + lead * t;
+    const c = Math.cos(a), s = Math.sin(a);
+    return prof.map(([r, dz]) => [r * c, r * s, z + dz]);
+  };
+  let prev = ring(0);
+  T.push([prev[0], prev[1], prev[2]], [prev[0], prev[2], prev[3]]); // start cap
+  for (let k = 1; k <= steps; k++) {
+    const cur = ring(k);
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      T.push([prev[i], cur[j], prev[j]], [prev[i], cur[i], cur[j]]);
+    }
+    prev = cur;
+  }
+  T.push([prev[0], prev[2], prev[1]], [prev[0], prev[3], prev[2]]); // end cap
+  return T;
+}
+
+function screwLayout(H, thrH) {
+  const lead = THR.pitch * THR.starts;
+  const zBot = H - thrH + THR.wr/2 + 0.3;
+  const zTop = H - THR.wr/2 - 0.3;
+  return { lead, zBot, turns: Math.max(0.25, (zTop - zBot) / lead) };
+}
+
+function buildScrewBox(D, H, wall, bottom, thrH) {
+  const g = screwLayout(H, thrH);
+  const T = buildBox(D, D, H, wall, bottom, D/2);
+  for (let s = 0; s < THR.starts; s++)
+    T.push(...helixRidge(D/2 - 0.3, D/2 + THR.d, THR.wr, THR.wc,
+      g.zBot, g.lead, g.turns, 2*Math.PI*s/THR.starts));
+  return T;
+}
+
+// Screw cap in print orientation (roof on the bed, thread inside).
+function buildScrewLid(D, wall, clr, thrH, lidT) {
+  const g = screwLayout(0, thrH); // only lead is used from here
+  const Rci = D/2 + THR.d + clr, Rco = Rci + wall;
+  const depth = thrH + 0.3;
+  const T = plate(2*Rco, 2*Rco, Rco, lidT);
+  T.push(...wallBand(2*Rco, 2*Rco, Rco, wall, lidT - 0.4, lidT + depth));
+  const zB = lidT + 0.3 + THR.wr/2 + 0.3;
+  const turns = Math.max(0.25, (lidT + depth - THR.wr/2 - 0.3 - zB) / g.lead);
+  for (let s = 0; s < THR.starts; s++)
+    T.push(...helixRidge(Rci + 0.3, D/2 + clr, THR.wr, THR.wc,
+      zB, g.lead, turns, 2*Math.PI*s/THR.starts));
+  return T;
 }
 
 /* ── dividers: split the cavity into zones ──
@@ -1123,6 +1198,11 @@ en: {
   f_dvpr: "Angles <small>degrees or % of the turn; overrides sectors</small>",
   ph_r: "e.g. 0, 120, 240", s_sect: "sectors",
   w_sectight: "Sectors come out narrower than 3 mm at the rim — adjust the angles or count.",
+  lid_screw: "Screw", f_thr: "Thread height",
+  screwNote: "A jar-style screw cap: 2-start trapezoidal thread (4.5 mm pitch, 45° flanks) closes in about half a turn. Both parts print flat without supports; the fit clearance sets how freely the thread runs.",
+  w_screwcyl: "The screw lid needs a cylindrical box.",
+  w_thrh: "Thread height must be at least 6 mm and leave 2 mm of wall below.",
+  w_thrdia: "The screw lid needs a diameter of 24 mm or more.",
   f_len: "Length <small>X axis</small>", f_wid: "Width <small>Y axis</small>", f_hgt: "Height <small>Z axis</small>",
   f_wall: "Wall thickness", f_bot: "Floor thickness", f_rad: "Corner radius <small>0 = sharp corners</small>",
   f_clr: "Fit clearance <small>per side</small>", f_lip: "Lip height",
@@ -1179,6 +1259,11 @@ fr: {
   f_dvpr: "Angles <small>degrés ou % du tour ; prioritaire sur les secteurs</small>",
   ph_r: "ex. 0, 120, 240", s_sect: "secteurs",
   w_sectight: "Des secteurs font moins de 3 mm au bord — ajustez les angles ou le nombre.",
+  lid_screw: "Vissé", f_thr: "Hauteur du filetage",
+  screwNote: "Couvercle à visser type bocal : filet trapézoïdal à 2 entrées (pas 4,5 mm, flancs à 45°), fermé en un demi-tour environ. Les deux pièces s'impriment à plat sans supports ; le jeu d'ajustement règle la liberté du filet.",
+  w_screwcyl: "Le couvercle vissé exige une boîte cylindrique.",
+  w_thrh: "La hauteur du filetage doit faire au moins 6 mm et laisser 2 mm de paroi en dessous.",
+  w_thrdia: "Le couvercle vissé exige un diamètre d'au moins 24 mm.",
   f_len: "Longueur <small>axe X</small>", f_wid: "Largeur <small>axe Y</small>", f_hgt: "Hauteur <small>axe Z</small>",
   f_wall: "Épaisseur des parois", f_bot: "Épaisseur du fond", f_rad: "Rayon des angles <small>0 = angles vifs</small>",
   f_clr: "Jeu d'ajustement <small>par côté</small>", f_lip: "Hauteur du rebord",
@@ -1235,6 +1320,11 @@ de: {
   f_dvpr: "Winkel <small>Grad oder % der Umdrehung; überschreibt Sektoren</small>",
   ph_r: "z. B. 0, 120, 240", s_sect: "Sektoren",
   w_sectight: "Sektoren werden am Rand schmaler als 3 mm — Winkel oder Anzahl anpassen.",
+  lid_screw: "Schraub", f_thr: "Gewindehöhe",
+  screwNote: "Schraubdeckel wie am Einmachglas: zweigängiges Trapezgewinde (4,5 mm Steigung, 45°-Flanken), schließt in etwa einer halben Umdrehung. Beide Teile drucken flach ohne Stützen; das Passungsspiel bestimmt die Gängigkeit.",
+  w_screwcyl: "Der Schraubdeckel braucht eine zylindrische Box.",
+  w_thrh: "Die Gewindehöhe muss mindestens 6 mm betragen und 2 mm Wand darunter lassen.",
+  w_thrdia: "Der Schraubdeckel braucht mindestens 24 mm Durchmesser.",
   f_len: "Länge <small>X-Achse</small>", f_wid: "Breite <small>Y-Achse</small>", f_hgt: "Höhe <small>Z-Achse</small>",
   f_wall: "Wandstärke", f_bot: "Bodenstärke", f_rad: "Eckenradius <small>0 = scharfe Ecken</small>",
   f_clr: "Passungsspiel <small>pro Seite</small>", f_lip: "Lippenhöhe",
@@ -1291,6 +1381,11 @@ es: {
   f_dvpr: "Ángulos <small>grados o % de la vuelta; anula los sectores</small>",
   ph_r: "p. ej. 0, 120, 240", s_sect: "sectores",
   w_sectight: "Hay sectores de menos de 3 mm en el borde — ajusta los ángulos o el número.",
+  lid_screw: "Roscada", f_thr: "Altura de la rosca",
+  screwNote: "Tapa de rosca tipo frasco: rosca trapezoidal de 2 entradas (paso 4,5 mm, flancos a 45°), cierra en media vuelta aproximadamente. Ambas piezas se imprimen en plano sin soportes; la holgura de ajuste regula la suavidad de la rosca.",
+  w_screwcyl: "La tapa roscada necesita una caja cilíndrica.",
+  w_thrh: "La altura de la rosca debe ser de al menos 6 mm y dejar 2 mm de pared debajo.",
+  w_thrdia: "La tapa roscada necesita un diámetro de al menos 24 mm.",
   f_len: "Longitud <small>eje X</small>", f_wid: "Anchura <small>eje Y</small>", f_hgt: "Altura <small>eje Z</small>",
   f_wall: "Grosor de pared", f_bot: "Grosor del fondo", f_rad: "Radio de esquinas <small>0 = esquinas vivas</small>",
   f_clr: "Holgura de ajuste <small>por lado</small>", f_lip: "Altura del labio",
@@ -1347,6 +1442,11 @@ zh: {
   f_dvpr: "角度 <small>度数或整圈的 %；优先于扇区</small>",
   ph_r: "例：0, 120, 240", s_sect: "扇区",
   w_sectight: "扇区在边缘处窄于 3 mm——请调整角度或数量。",
+  lid_screw: "螺纹盖", f_thr: "螺纹高度",
+  screwNote: "罐头式螺纹盖：双头梯形螺纹（螺距 4.5 mm，45° 牙侧），约半圈拧紧。两件平放打印无需支撑；配合间隙决定旋合松紧。",
+  w_screwcyl: "螺纹盖需要圆柱形盒子。",
+  w_thrh: "螺纹高度至少 6 mm，且下方需留 2 mm 壁高。",
+  w_thrdia: "螺纹盖需要直径不小于 24 mm。",
   f_len: "长度 <small>X 轴</small>", f_wid: "宽度 <small>Y 轴</small>", f_hgt: "高度 <small>Z 轴</small>",
   f_wall: "壁厚", f_bot: "底厚", f_rad: "圆角半径 <small>0 = 直角</small>",
   f_clr: "配合间隙 <small>每侧</small>", f_lip: "内唇高度",
@@ -1403,6 +1503,11 @@ ru: {
   f_dvpr: "Углы <small>в градусах или % оборота; важнее секторов</small>",
   ph_r: "напр. 0, 120, 240", s_sect: "секторы",
   w_sectight: "Секторы у кромки уже 3 мм — измените углы или количество.",
+  lid_screw: "Резьбовая", f_thr: "Высота резьбы",
+  screwNote: "Крышка-банка: двухзаходная трапецеидальная резьба (шаг 4,5 мм, склоны 45°), закрывается примерно за пол-оборота. Обе детали печатаются плоско без поддержек; зазор посадки задаёт лёгкость хода резьбы.",
+  w_screwcyl: "Резьбовой крышке нужна цилиндрическая коробка.",
+  w_thrh: "Высота резьбы — от 6 мм, и под ней должно оставаться 2 мм стенки.",
+  w_thrdia: "Резьбовой крышке нужен диаметр от 24 мм.",
   f_len: "Длина <small>ось X</small>", f_wid: "Ширина <small>ось Y</small>", f_hgt: "Высота <small>ось Z</small>",
   f_wall: "Толщина стенки", f_bot: "Толщина дна", f_rad: "Скругление углов <small>0 = острые</small>",
   f_clr: "Зазор посадки <small>на сторону</small>", f_lip: "Высота бортика",
@@ -1462,7 +1567,7 @@ function applyLang() {
     modeSeg: ["mode", { outer: "mOuter", inner: "mInner" }],
     unitSeg: ["unit", { mm: "uMetric", in: "uImperial" }],
     shapeSeg: ["shape", { rect: "shape_rect", cyl: "shape_cyl" }],
-    lidSeg:  ["lid", { none: "lid_none", inset: "lid_inset", cap: "lid_cap", hinge: "lid_hinge", slide: "lid_slide" }],
+    lidSeg:  ["lid", { none: "lid_none", inset: "lid_inset", cap: "lid_cap", hinge: "lid_hinge", slide: "lid_slide", screw: "lid_screw" }],
     hingeSeg:["hinge", { pip: "h_pip", pin: "h_pin", snap: "h_snap" }],
     latchSeg:["latch", { flap: "l_flap", tongue: "l_tongue", none: "l_none" }],
   };
@@ -1473,7 +1578,7 @@ function applyLang() {
     clr: "f_clr", lip: "f_lip", tor: "f_tor", skirt: "f_skirt", lidT: "f_lidT",
     zx: "f_zones", zy: "f_zones", dvpx: "f_dvpx", dvpy: "f_dvpy",
     dvhx: "f_divh", dvhy: "f_divh", dvtx: "f_divth", dvty: "f_divth",
-    zr: "f_sect", dvpr: "f_dvpr", dvhr: "f_divh", dvtr: "f_divth",
+    zr: "f_sect", dvpr: "f_dvpr", dvhr: "f_divh", dvtr: "f_divth", thr: "f_thr",
   };
   document.querySelectorAll(".field").forEach(f => {
     const inp = f.querySelector("input");
@@ -1486,6 +1591,7 @@ function applyLang() {
   document.querySelectorAll(".seg-label").forEach((el, i) => el.textContent = T(segLabels[i]));
   $("hingeNote").innerHTML = T("hingeNote");
   $("slideNote").innerHTML = T("slideNote");
+  $("screwNote").innerHTML = T("screwNote");
   document.querySelector("footer").textContent = T("footer");
   document.querySelector(".hud.tl").innerHTML = T("hud_hint");
   document.querySelector(".hud.br").innerHTML = `${T("hud_outer")}<div class="dims" id="hudDims"></div>`;
@@ -1500,6 +1606,7 @@ function rebuild() {
     lidT: val("lidT"), tor: val("tor"), zx: cnt("zx"), zy: cnt("zy"),
     dvhx: val("dvhx"), dvhy: val("dvhy"), dvtx: val("dvtx"), dvty: val("dvty"),
     dia: val("dia"), zr: cnt("zr"), dvhr: val("dvhr"), dvtr: val("dvtr"),
+    thr: val("thr"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -1538,6 +1645,13 @@ function rebuild() {
   }
   if (shape === "cyl" && (lidType === "hinge" || lidType === "slide"))
     warnings.push(T("w_cyllid"));
+  if (lidType === "screw") {
+    if (shape !== "cyl") warnings.push(T("w_screwcyl"));
+    else {
+      if (raw.thr < 6 || raw.thr > H - raw.bottom - 2) warnings.push(T("w_thrh"));
+      if (L < 24) warnings.push(T("w_thrdia"));
+    }
+  }
   if (lidType === "hinge") {
     const need = hingeKind === "snap" ? 18 : 25;
     if (L - 2*Math.max(R, 2) - 4 < need)
@@ -1582,6 +1696,9 @@ function rebuild() {
       divTop = slideLayout(H, raw.lidT, raw.clr).h1 - 0.2;
       base = buildSlideBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.clr);
       lidTris = clean(buildSlideLid(L, W, raw.wall, R, raw.lidT, raw.clr));
+    } else if (lidType === "screw") {
+      base = buildScrewBox(L, H, raw.wall, raw.bottom, raw.thr);
+      lidTris = clean(buildScrewLid(L, raw.wall, raw.clr, raw.thr, raw.lidT));
     } else {
       if (lidType === "inset") divTop = H - raw.lip - 0.3;
       base = buildBox(L, W, H, raw.wall, raw.bottom, R);
@@ -1690,7 +1807,7 @@ $("dlBox").addEventListener("click", () => {
 });
 $("dlLid").addEventListener("click", () => {
   if (!model?.ok || !model.lidTris.length) return;
-  const name = { inset: "lid", cap: "cap", slide: "lid_slide", hinge: "lid_hinged" }[lidType];
+  const name = { inset: "lid", cap: "cap", slide: "lid_slide", hinge: "lid_hinged", screw: "lid_screw" }[lidType];
   download(toSTL(model.lidTris, name), `${name}_${dimTag()}.stl`);
 });
 
@@ -1923,7 +2040,8 @@ function syncShapeUI() {
   $("fRad").style.display = cyl ? "none" : "";
   $("divRadial").style.display = cyl ? "" : "none";
   $("lidSeg").querySelectorAll("button").forEach(b => {
-    const na = cyl && (b.dataset.lid === "hinge" || b.dataset.lid === "slide");
+    const na = cyl ? (b.dataset.lid === "hinge" || b.dataset.lid === "slide")
+                   : b.dataset.lid === "screw";
     b.disabled = na;
     b.style.opacity = na ? .35 : "";
     b.style.cursor = na ? "not-allowed" : "";
@@ -1934,7 +2052,9 @@ $("shapeSeg").querySelectorAll("button").forEach(btn => {
     if (btn.dataset.shape === shape) return;
     shape = btn.dataset.shape;
     setSeg("shapeSeg", "shape", shape);
-    if (shape === "cyl" && (lidType === "hinge" || lidType === "slide")) {
+    const na = shape === "cyl" ? (lidType === "hinge" || lidType === "slide")
+                               : lidType === "screw";
+    if (na) {
       lidType = "inset";
       setSeg("lidSeg", "lid", lidType);
       syncLidUI();
@@ -1951,6 +2071,7 @@ const LID_FIELDS = {
   cap:   ["fClr", "fTor", "fSkirt", "fLidT"],
   hinge: ["hingeOpts", "fTor", "fLidT", "hingeNote"],
   slide: ["fClr", "fLidT", "slideNote"],
+  screw: ["fClr", "fThr", "fLidT", "screwNote"],
 };
 const ALL_LID_IDS = [...new Set(Object.values(LID_FIELDS).flat())];
 
@@ -1971,7 +2092,7 @@ function syncLidUI() {
    back/forward buttons walk the parameter history. */
 
 const INPUT_IDS = ["len","wid","hgt","dia","wall","bot","rad","clr","lip","skirt","tor","lidT",
-                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty","zr","dvpr","dvhr","dvtr"];
+                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty","zr","dvpr","dvhr","dvtr","thr"];
 const DEF = {
   unit: "mm", mode: "outer", shape: "rect", lid: "none", hinge: "pip", latch: "flap",
   inputs: Object.fromEntries(INPUT_IDS.map(id => [id, $(id).value])),
@@ -2047,6 +2168,8 @@ $("lidSeg").querySelectorAll("button").forEach(btn => {
     lidType = btn.dataset.lid;
     $("lidSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
     if (lidType === "cap" && val("skirt") < 2) $("skirt").value = 8; // a cap needs its skirt
+    if (lidType === "screw" && val("clr") < 0.25)                    // threads like a freer fit
+      $("clr").value = unit === "in" ? +(0.3 / IN).toFixed(4) : 0.3;
     syncLidUI();
     rebuild();
   });
@@ -2080,6 +2203,7 @@ $("langSel").addEventListener("change", () => {
 
 resize();
 applyLang();
+syncShapeUI();
 if (location.hash.length > 1) { fromHistory = true; applyState(location.hash.slice(1)); }
 else rebuild();
 requestAnimationFrame(render);

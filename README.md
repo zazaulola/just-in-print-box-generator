@@ -17,6 +17,10 @@ JavaScript.
 - **Radial dividers** — cylinders can also be split into pie sectors: an
   equal count, or explicit spoke angles in degrees or % of the turn
   (e.g. `0, 120, 240`), with their own height and thickness.
+- **Screw lid** — cylinders get a jar-style screw cap: a 2-start trapezoidal
+  thread (4.5 mm pitch, 45° flanks, adjustable height) that closes in about
+  half a turn; the fit clearance sets how freely it runs. Both parts print
+  flat without supports.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness.
 - **Dividers** — split the cavity into zones along both axes: an equal split
