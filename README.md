@@ -35,6 +35,9 @@ JavaScript.
 - **Shareable links & history** — every setting lands in the URL hash, so a
   link reproduces the exact setup (including the unit system), and the
   browser's back/forward buttons walk through your parameter changes.
+- **Per-field reset** — every parameter shows a small ↺ button whenever it
+  differs from its default (a modified-indicator that also resets the value,
+  honoring the active unit system).
 - **Six languages** — English, French, German, Spanish, Chinese, and Russian,
   including warnings and the data sheet, with locale-aware number formatting.
   The choice is remembered; first visits follow the browser language.
