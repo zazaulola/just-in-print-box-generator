@@ -23,6 +23,10 @@ JavaScript.
   flat without supports.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness.
+- **Bottom fillets** — separate inner and outer radii: a concave strength
+  cove where the floor meets the walls inside, and a convex round on the
+  outer base edge. Both follow the outline (rectangles and cylinders alike)
+  and apply to every box variant, including hinged, sliding, and screw.
 - **Dividers** — split the cavity into zones along both axes: an equal split
   by zone count, or explicit divider positions in length units or % of the
   inner span (e.g. `40, 66%`). Crosswise and lengthwise dividers take
