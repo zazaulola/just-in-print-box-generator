@@ -64,13 +64,14 @@
     padding: 3px 8px 2px;
     border-radius: 2px;
   }
-  #langSel {
+  header .prefs { display: flex; gap: 6px; }
+  #langSel, #unitSel {
     background: var(--panel-2); color: var(--muted);
     border: 1px solid var(--line); border-radius: 3px;
     font-family: var(--font-mono); font-size: 11px;
     padding: 3px 6px; outline: none; cursor: pointer;
   }
-  #langSel:focus { border-color: var(--accent-dim); color: var(--text); }
+  #langSel:focus, #unitSel:focus { border-color: var(--accent-dim); color: var(--text); }
   header h1 {
     font-family: var(--font-disp);
     font-weight: 700;
@@ -97,29 +98,51 @@
     color: var(--muted);
     margin-bottom: 12px;
   }
-  .group-title::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .group-title::after { content: ""; flex: 1; height: 1px; background: var(--line); order: 5; }
   .group-title .num { color: var(--accent); font-family: var(--font-mono); font-size: 11px; }
+  .group-title { cursor: pointer; user-select: none; }
+  .group-title:hover { color: var(--text); }
+  .group-title .chev {
+    order: 9; font-size: 9px; color: var(--muted);
+    transition: transform .15s;
+  }
+  .group.collapsed .chev { transform: rotate(-90deg); }
+  .group.collapsed > *:not(.group-title) { display: none; }
+  /* a folded section still states what it is set to */
+  .group-title .sum {
+    order: 6; color: var(--accent);
+    font-family: var(--font-body); font-size: 11.5px;
+    text-transform: none; letter-spacing: 0;
+  }
+  .group:not(.collapsed) .sum { display: none; }
 
-  /* segmented control */
-  .seg {
-    display: grid; grid-template-columns: 1fr 1fr;
-    border: 1px solid var(--line); border-radius: 4px;
-    overflow: hidden; margin-bottom: 14px;
+  /* choice controls: real radios and checkboxes, nested to show what
+     belongs to what */
+  .radios { display: grid; gap: 2px; margin-bottom: 10px; }
+  .radios label, label.chk {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13.5px; color: var(--text);
+    padding: 4px 0; cursor: pointer;
   }
-  .seg button {
-    background: transparent; border: 0; color: var(--muted);
-    font-family: var(--font-body); font-size: 12.5px;
-    padding: 8px 4px; cursor: pointer;
-    transition: background .15s, color .15s;
+  .radios label small, label.chk small {
+    color: var(--muted); font-size: 11.5px;
   }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
-  .seg.quad { grid-template-columns: 1fr 1fr; }
-  .seg.quad button + button { border-left: 0; }
-  .seg.quad button:nth-child(even) { border-left: 1px solid var(--line); }
-  .seg.quad button:nth-child(n+3) { border-top: 1px solid var(--line); }
-  .seg.quad button:last-child:nth-child(odd) { grid-column: 1 / -1; border-left: 0; }
-  .seg.tri { grid-template-columns: 1fr 1fr 1fr; }
+  .radios input, label.chk input {
+    accent-color: var(--accent);
+    width: 14px; height: 14px; margin: 0; flex: 0 0 auto; cursor: pointer;
+  }
+  .radios label:has(input:disabled) { color: var(--muted); opacity: .4; cursor: not-allowed; }
+  .radios label:has(input:disabled) input { cursor: not-allowed; }
+  label.chk {
+    font-family: var(--font-disp); font-size: 15px;
+    letter-spacing: .06em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  /* nesting rail: everything indented under a choice depends on it */
+  .sub {
+    margin: 2px 0 6px 6px; padding-left: 14px;
+    border-left: 1px solid var(--line);
+  }
   .seg-label {
     font-size: 11px; color: var(--muted); letter-spacing: .08em;
     text-transform: uppercase; font-family: var(--font-mono);
@@ -268,32 +291,39 @@
   <header class="reveal" style="animation-delay:.02s">
     <div class="tagrow">
       <span class="tag" id="hdrTag">OFFLINE TOOL · v1.0</span>
-      <select id="langSel" aria-label="Language">
-        <option value="en">EN</option>
-        <option value="fr">FR</option>
-        <option value="de">DE</option>
-        <option value="es">ES</option>
-        <option value="zh">中文</option>
-        <option value="ru">RU</option>
-      </select>
+      <div class="prefs">
+        <select id="langSel" aria-label="Language">
+          <option value="en">EN</option>
+          <option value="fr">FR</option>
+          <option value="de">DE</option>
+          <option value="es">ES</option>
+          <option value="zh">中文</option>
+          <option value="ru">RU</option>
+        </select>
+        <select id="unitSel" aria-label="Units">
+          <option value="mm">MM</option>
+          <option value="in">INCH</option>
+        </select>
+      </div>
     </div>
     <h1>Box<em>.stl</em></h1>
     <p>A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.</p>
   </header>
 
-  <section class="group reveal" style="animation-delay:.08s">
-    <div class="group-title"><span class="num">01</span> Dimensions</div>
-    <div class="seg" id="modeSeg">
-      <button data-mode="outer" class="on">Outer</button>
-      <button data-mode="inner">Inner</button>
+  <section class="group reveal" style="animation-delay:.06s">
+    <div class="group-title"><span class="num">01</span> Shape</div>
+    <div class="radios" id="shapeSeg">
+      <label><input type="radio" name="shape" value="rect" checked><span data-i18n="shape_rect">Rectangular</span></label>
+      <label><input type="radio" name="shape" value="cyl"><span data-i18n="shape_cyl">Cylindrical</span></label>
     </div>
-    <div class="seg" id="unitSeg" style="margin-top:-6px">
-      <button data-unit="mm" class="on">Metric — mm</button>
-      <button data-unit="in">Imperial — inches</button>
-    </div>
-    <div class="seg" id="shapeSeg" style="margin-top:-6px">
-      <button data-shape="rect" class="on">Rectangular</button>
-      <button data-shape="cyl">Cylindrical</button>
+  </section>
+
+  <section class="group reveal" style="animation-delay:.1s">
+    <div class="group-title"><span class="num">02</span> Dimensions</div>
+    <div class="seg-label" data-i18n="segMode">Numbers below refer to</div>
+    <div class="radios" id="modeSeg">
+      <label><input type="radio" name="mode" value="outer" checked><span data-i18n="mOuter">Outer size</span></label>
+      <label><input type="radio" name="mode" value="inner"><span data-i18n="mInner">Inner size</span></label>
     </div>
     <div class="field" id="fDia" style="display:none">
       <label>Diameter</label>
@@ -315,10 +345,15 @@
       <div class="stepper" data-for="hgt"><button>−</button><input id="hgt" value="40" data-step="1" data-min="1"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
+    <div class="field" id="fRad">
+      <label>Corner radius <small>0 = sharp corners</small></label>
+      <div class="stepper" data-for="rad"><button>−</button><input id="rad" value="4" data-step="0.5" data-min="0"><button>+</button></div>
+      <span class="unit">mm</span>
+    </div>
   </section>
 
   <section class="group reveal" style="animation-delay:.14s">
-    <div class="group-title"><span class="num">02</span> Walls</div>
+    <div class="group-title"><span class="num">03</span> Walls</div>
     <div class="field">
       <label>Wall thickness</label>
       <div class="stepper" data-for="wall"><button>−</button><input id="wall" value="1.6" data-step="0.2" data-min="0.2"><button>+</button></div>
@@ -329,47 +364,59 @@
       <div class="stepper" data-for="bot"><button>−</button><input id="bot" value="1.6" data-step="0.2" data-min="0.2"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
-    <div class="field" id="fRad">
-      <label>Corner radius <small>0 = sharp corners</small></label>
-      <div class="stepper" data-for="rad"><button>−</button><input id="rad" value="4" data-step="0.5" data-min="0"><button>+</button></div>
-      <span class="unit">mm</span>
-    </div>
     <div class="field">
-      <label>Bottom fillet, inner <small>strength cove at the floor</small></label>
+      <label>Bottom fillet <small>strength cove where the floor meets the walls</small></label>
       <div class="stepper" data-for="fbi"><button>−</button><input id="fbi" value="0" data-step="0.5" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
-    <div class="field">
-      <label>Bottom fillet, outer <small>rounds the base edge</small></label>
-      <div class="stepper" data-for="fbo"><button>−</button><input id="fbo" value="0" data-step="0.5" data-min="0"><button>+</button></div>
+    <div class="hint" id="filletNote" style="display:none"></div>
+    <div class="field" id="fFlat" style="display:none">
+      <label>Bottom flattening <small>straight bearing band under the round</small></label>
+      <div class="stepper" data-for="flat"><button>−</button><input id="flat" value="0" data-step="0.2" data-min="0"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
   </section>
 
   <section class="group reveal" style="animation-delay:.2s">
-    <div class="group-title"><span class="num">03</span> Lid</div>
-    <div class="seg quad" id="lidSeg">
-      <button data-lid="none" class="on">None</button>
-      <button data-lid="inset">Inset</button>
-      <button data-lid="cap">Cap</button>
-      <button data-lid="hinge">Hinged</button>
-      <button data-lid="slide">Sliding</button>
-      <button data-lid="screw">Screw</button>
-    </div>
-    <div id="hingeOpts" style="display:none">
-      <div class="seg-label">Hinge</div>
-      <div class="seg tri" id="hingeSeg">
-        <button data-hinge="pip" class="on">In place</button>
-        <button data-hinge="pin">Filament pin</button>
-        <button data-hinge="snap">Snap-on</button>
+    <div class="group-title"><span class="num">04</span> Lid</div>
+    <label class="chk"><input type="checkbox" id="lidOn"><span data-i18n="lidOn">Add a lid</span></label>
+    <div class="sub" id="lidTree" style="display:none">
+      <div class="radios" id="kindSeg">
+        <label><input type="radio" name="kind" value="lift" checked><span data-i18n="kind_lift">Lift-off lid</span></label>
+        <label><input type="radio" name="kind" value="slide"><span data-i18n="kind_slide">Sliding lid</span></label>
       </div>
-      <div class="seg-label">Latch</div>
-      <div class="seg tri" id="latchSeg">
-        <button data-latch="flap" class="on">Flap</button>
-        <button data-latch="tongue">Tongue</button>
-        <button data-latch="none">None</button>
+
+      <div id="liftTree">
+        <div class="seg-label" data-i18n="segRet">What holds it shut</div>
+        <div class="radios" id="retSeg">
+          <label><input type="radio" name="ret" value="friction" checked><span data-i18n="ret_friction">Friction fit</span></label>
+          <label><input type="radio" name="ret" value="hinge"><span data-i18n="ret_hinge">Hinge and latch</span></label>
+          <label><input type="radio" name="ret" value="screw"><span data-i18n="ret_screw">Screw thread</span></label>
+        </div>
+
+        <div class="sub" id="fitTree">
+          <div class="radios" id="fitSeg">
+            <label><input type="radio" name="fit" value="inset" checked><span data-i18n="fit_inset">Grips the inner walls</span></label>
+            <label><input type="radio" name="fit" value="cap"><span data-i18n="fit_cap">Grips the outer walls</span></label>
+          </div>
+        </div>
+
+        <div class="sub" id="hingeOpts" style="display:none">
+          <div class="seg-label" data-i18n="segHinge">Hinge</div>
+          <div class="radios" id="hingeSeg">
+            <label><input type="radio" name="hinge" value="pip" checked><span data-i18n="h_pip">Printed in place</span></label>
+            <label><input type="radio" name="hinge" value="pin"><span data-i18n="h_pin">Filament pin</span></label>
+            <label><input type="radio" name="hinge" value="snap"><span data-i18n="h_snap">Snap-on</span></label>
+          </div>
+          <div class="seg-label" data-i18n="segLatch">Latch</div>
+          <div class="radios" id="latchSeg">
+            <label><input type="radio" name="latch" value="flap" checked><span data-i18n="l_flap">Swinging flap</span></label>
+            <label><input type="radio" name="latch" value="tongue"><span data-i18n="l_tongue">Springy tongue</span></label>
+            <label><input type="radio" name="latch" value="none"><span data-i18n="l_none">None</span></label>
+          </div>
+        </div>
       </div>
-    </div>
+      <div class="seg-label" id="segLidParams" data-i18n="segLidParams">Lid dimensions</div>
     <div class="field" id="fClr" style="display:none">
       <label>Fit clearance <small>per side</small></label>
       <div class="stepper" data-for="clr"><button>−</button><input id="clr" value="0.2" data-step="0.05" data-min="0"><button>+</button></div>
@@ -419,11 +466,14 @@
       flanks) closes in about half a turn. Both parts print flat without
       supports; the fit clearance sets how freely the thread runs.
     </div>
+    </div>
   </section>
 
   <section class="group reveal" style="animation-delay:.23s">
-    <div class="group-title"><span class="num">04</span> Dividers</div>
-    <div class="seg-label">Crosswise — split the length</div>
+    <div class="group-title"><span class="num">05</span> Dividers</div>
+    <label class="chk"><input type="checkbox" id="divOn"><span data-i18n="divOn">Add dividers</span></label>
+    <div class="sub" id="divTree" style="display:none">
+    <div class="seg-label" data-i18n="segCross">Crosswise — split the length</div>
     <div class="field">
       <label>Zones <small>equal split</small></label>
       <div class="stepper" data-for="zx"><button>−</button><input id="zx" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
@@ -443,7 +493,7 @@
       <div class="stepper" data-for="dvtx"><button>−</button><input id="dvtx" value="1.2" data-step="0.2" data-min="0.4"><button>+</button></div>
       <span class="unit">mm</span>
     </div>
-    <div class="seg-label">Lengthwise — split the width</div>
+    <div class="seg-label" data-i18n="segLength">Lengthwise — split the width</div>
     <div class="field">
       <label>Zones <small>equal split</small></label>
       <div class="stepper" data-for="zy"><button>−</button><input id="zy" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
@@ -464,7 +514,7 @@
       <span class="unit">mm</span>
     </div>
     <div id="divRadial" style="display:none">
-      <div class="seg-label">Radial — split into sectors</div>
+      <div class="seg-label" data-i18n="segRadial">Radial — split into sectors</div>
       <div class="field">
         <label>Sectors <small>equal split</small></label>
         <div class="stepper" data-for="zr"><button>−</button><input id="zr" value="1" data-step="1" data-min="1" data-int="1"><button>+</button></div>
@@ -485,12 +535,13 @@
         <span class="unit">mm</span>
       </div>
     </div>
+    </div>
   </section>
 
   <div id="warnings"></div>
 
   <section class="group reveal" style="animation-delay:.26s">
-    <div class="group-title"><span class="num">05</span> Data sheet</div>
+    <div class="group-title"><span class="num">06</span> Data sheet</div>
     <div class="stats" id="stats"></div>
   </section>
 
@@ -545,8 +596,9 @@ function outline(hx, hy, r, n = SEG) {
 
 // Open tub with a sloped rim: wall height runs linearly from hF (front,
 // y=−W/2) to hB (back, y=+W/2). A regular box is the special case hF = hB.
-// fo > 0 rounds the outer bottom edge with a quarter-circle of that radius.
-function buildTub(L, W, hF, hB, wall, bottom, R, fo = 0) {
+// fo > 0 rounds the outer bottom edge with a quarter-circle of that radius;
+// flat > 0 lifts that round above the bed, leaving a straight bearing band.
+function buildTub(L, W, hF, hB, wall, bottom, R, fo = 0, flat = 0) {
   const ns = segFor(R);
   const outer = outline(L / 2, W / 2, R, ns);
   const inner = outline(L / 2 - wall, W / 2 - wall, Math.max(R - wall, 0), ns);
@@ -554,18 +606,22 @@ function buildTub(L, W, hF, hB, wall, bottom, R, fo = 0) {
   const h = p => hF + (p[1] + W / 2) / W * (hB - hF);
   const v = (p, z) => [p[0], p[1], z];
   const quad = (a, b, c, d) => { T.push([a, b, c], [a, c, d]); };
-  // arc rings for the rounded outer bottom edge, z = fo down to 0
-  fo = Math.max(0, Math.min(fo, wall, hF - 0.2, hB - 0.2));
+  // arc rings for the rounded outer bottom edge, plus an optional straight
+  // bearing band of height `flat` between the round and the bed
+  fo = Math.max(0, Math.min(fo, wall, hF - 0.4, hB - 0.4));
+  flat = fo > 0.05 ? Math.max(0, Math.min(flat, hF - fo - 0.2, hB - fo - 0.2)) : 0;
   const arcs = [];
   if (fo > 0.05) {
     for (let k = 0; k <= 5; k++) {
       const b = Math.PI / 2 * k / 5;
-      const d = fo * (1 - Math.cos(b)), z = fo * (1 - Math.sin(b));
+      const d = fo * (1 - Math.cos(b)), z = flat + fo * (1 - Math.sin(b));
       arcs.push(outline(L/2 - d, W/2 - d, Math.max(R - d, 0), ns).map(p => [p[0], p[1], z]));
     }
+    if (flat > 0.01) // straight band: same section carried down to the bed
+      arcs.push(arcs[arcs.length - 1].map(p => [p[0], p[1], 0]));
   }
   const base = arcs.length ? arcs[arcs.length - 1] : outer.map(p => [p[0], p[1], 0]);
-  const z0 = arcs.length ? fo : 0;
+  const z0 = arcs.length ? flat + fo : 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     quad(v(outer[i], z0), v(outer[j], z0), v(outer[j], h(outer[j])), v(outer[i], h(outer[i])));         // outer wall
@@ -579,8 +635,8 @@ function buildTub(L, W, hF, hB, wall, bottom, R, fo = 0) {
   return T;
 }
 
-function buildBox(L, W, H, wall, bottom, R, fo = 0) {
-  return buildTub(L, W, H, H, wall, bottom, R, fo);
+function buildBox(L, W, H, wall, bottom, R, fo = 0, flat = 0) {
+  return buildTub(L, W, H, H, wall, bottom, R, fo, flat);
 }
 
 // Generalized lid shell in print orientation (roof plate on the bed).
@@ -842,9 +898,9 @@ function screwLayout(H, thrH) {
   return { lead, zBot, turns: Math.max(0.25, (zTop - zBot) / lead) };
 }
 
-function buildScrewBox(D, H, wall, bottom, thrH, fo = 0) {
+function buildScrewBox(D, H, wall, bottom, thrH, fo = 0, flat = 0) {
   const g = screwLayout(H, thrH);
-  const T = buildBox(D, D, H, wall, bottom, D/2, fo);
+  const T = buildBox(D, D, H, wall, bottom, D/2, fo, flat);
   for (let s = 0; s < THR.starts; s++)
     T.push(...helixRidge(D/2 - 0.3, D/2 + THR.d, THR.wr, THR.wc,
       g.zBot, g.lead, g.turns, 2*Math.PI*s/THR.starts));
@@ -960,9 +1016,9 @@ function slideLayout(H, lidT, clr) {
   return { h1: H - SL.railT - lidT - 2*clr }; // slot floor
 }
 
-function buildSlideBox(L, W, H, wall, bottom, R, lidT, clr, fo = 0) {
+function buildSlideBox(L, W, H, wall, bottom, R, lidT, clr, fo = 0, flat = 0) {
   const g = slideLayout(H, lidT, clr);
-  const T = buildBox(L, W, g.h1, wall, bottom, R, fo);
+  const T = buildBox(L, W, g.h1, wall, bottom, R, fo, flat);
   const xs0 = -L/2 + Math.max(R, 0.01), xs1 = L/2 - Math.max(R, 0.01);
   // side walls above the slot floor
   T.push(...cuboid(xs0, xs1, W/2 - wall, W/2, g.h1, H));
@@ -1132,9 +1188,9 @@ function latchBox(latch, g, W) {
   return [];
 }
 
-function buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, kind, latch, fo = 0) {
+function buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, kind, latch, fo = 0, flat = 0) {
   const g = hingeLayout(L, W, H, R, lidT, tor, kind);
-  const T = buildBox(L, W, g.rimTop, wall, bottom, R, fo);
+  const T = buildBox(L, W, g.rimTop, wall, bottom, R, fo, flat);
   const bite = Math.min(0.8, wall * 0.5);
   if (kind === "snap") {
     for (const [x0, x1] of g.boxSegs) {
@@ -1184,8 +1240,8 @@ function buildHingedLidLocal(L, W, H, wall, R, lidT, tor, kind, latch) {
 
 // Print-in-place: one assembled piece — box + lid flipped into place
 // (rotate 180° about Y: the lid is x-symmetric, so [−x, y, H−z] is exact).
-function buildHingedPip(L, W, H, wall, bottom, R, lidT, tor, latch, fo = 0) {
-  const T = buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, "pip", latch, fo);
+function buildHingedPip(L, W, H, wall, bottom, R, lidT, tor, latch, fo = 0, flat = 0) {
+  const T = buildHingedBox(L, W, H, wall, bottom, R, lidT, tor, "pip", latch, fo, flat);
   const lid = buildHingedLidLocal(L, W, H, wall, R, lidT, tor, "pip", latch);
   T.push(...lid.map(t => t.map(p => [-p[0], p[1], H - p[2]])));
   return T;
@@ -1256,39 +1312,49 @@ en: {
   title: "Box.STL — Parametric Box Generator for 3D Printing",
   tag: "OFFLINE TOOL · v1.0",
   intro: "A parametric box for 3D printing. Set the dimensions — download a ready-to-slice binary STL. Work in millimeters or inches; the STL always exports in mm.",
-  g1: "Dimensions", g2: "Walls", g3: "Lid", g4: "Dividers", g5: "Data sheet",
-  mOuter: "Outer", mInner: "Inner", uMetric: "Metric — mm", uImperial: "Imperial — inches",
+  g1: "Shape", g2: "Dimensions", g3: "Walls", g4: "Lid", g5: "Dividers", g6: "Data sheet",
+  mOuter: "Outer size", mInner: "Inner size", segMode: "Numbers below refer to",
   shape_rect: "Rectangular", shape_cyl: "Cylindrical", f_dia: "Diameter",
+  lidOn: "Add a lid", divOn: "Add dividers", segLidParams: "Lid dimensions",
+  kind_lift: "Lift-off lid", kind_slide: "Sliding lid",
+  segRet: "What holds it shut",
+  ret_friction: "Friction fit", ret_hinge: "Hinge and latch", ret_screw: "Screw thread",
+  fit_inset: "Grips the inner walls <small>lid drops in</small>",
+  fit_cap: "Grips the outer walls <small>lid goes over</small>",
   w_cyllid: "This lid type isn't available for cylindrical boxes — use inset or cap.",
   segRadial: "Radial — split into sectors", f_sect: "Sectors <small>equal split</small>",
   f_dvpr: "Angles <small>degrees or % of the turn; overrides sectors</small>",
   ph_r: "e.g. 0, 120, 240", s_sect: "sectors",
   w_sectight: "Sectors come out narrower than 3 mm at the rim — adjust the angles or count.",
-  lid_screw: "Screw", f_thr: "Thread height",
+  f_thr: "Thread height",
   screwNote: "A jar-style screw cap: 2-start trapezoidal thread (4.5 mm pitch, 45° flanks) closes in about half a turn. Both parts print flat without supports; the fit clearance sets how freely the thread runs.",
   w_screwcyl: "The screw lid needs a cylindrical box.",
   w_thrh: "Thread height must be at least 6 mm and leave 2 mm of wall below.",
   w_thrdia: "The screw lid needs a diameter of 24 mm or more.",
   resetTip: "Reset to default",
-  f_fbi: "Bottom fillet, inner <small>strength cove at the floor</small>",
-  f_fbo: "Bottom fillet, outer <small>rounds the base edge</small>",
-  w_fbi: "The inner bottom fillet is too large for the cavity.",
-  w_fbo: "The outer bottom fillet can't exceed the wall thickness.",
+  f_fbi: "Bottom fillet <small>strength cove where the floor meets the walls</small>",
+  f_flat: "Bottom flattening <small>straight bearing band under the round</small>",
+  autoRound: "Outer base edge is rounded {0} to match the fillet (capped by the {1} wall). Flattening lifts that round off the bed so the box stands on a straight band.",
+  w_fbi: "The bottom fillet is too large for the cavity.",
+  w_flat: "Flattening plus the base round leaves under 2 mm of straight wall.",
   f_len: "Length <small>X axis</small>", f_wid: "Width <small>Y axis</small>", f_hgt: "Height <small>Z axis</small>",
   f_wall: "Wall thickness", f_bot: "Floor thickness", f_rad: "Corner radius <small>0 = sharp corners</small>",
-  f_clr: "Fit clearance <small>per side</small>", f_lip: "Lip height",
+  f_clr: "Fit clearance <small></small>",
+  clr_inset: "gap between lip and inner wall, per side",
+  clr_cap: "gap between skirt and outer wall, per side",
+  clr_slide: "slot gap around the sliding lid",
+  clr_screw: "how freely the thread runs", f_lip: "Lip height",
   f_tor: "Lid body height <small>above the seam</small>", f_skirt: "Lid skirt height <small>apron over the walls</small>",
   f_lidT: "Lid thickness",
   f_zones: "Zones <small>equal split</small>",
   f_dvpx: "Positions <small>length units or % from the left inner wall; overrides zones</small>",
   f_dvpy: "Positions <small>length units or % from the front inner wall; overrides zones</small>",
-  f_divh: "Height <small>0 = full height</small>", f_divth: "Thickness",
+  f_divh: "Height <small>from the floor; 0 = full height</small>", f_divth: "Thickness",
   ph_x: "e.g. 40, 66%", ph_y: "e.g. 25, 50%, 75%",
-  lid_none: "None", lid_inset: "Inset", lid_cap: "Cap", lid_hinge: "Hinged", lid_slide: "Sliding",
   segHinge: "Hinge", segLatch: "Latch",
   segCross: "Crosswise — split the length", segLength: "Lengthwise — split the width",
-  h_pip: "In place", h_pin: "Filament pin", h_snap: "Snap-on",
-  l_flap: "Flap", l_tongue: "Tongue", l_none: "None",
+  h_pip: "Printed in place", h_pin: "Filament pin", h_snap: "Snap-on",
+  l_flap: "Swinging flap", l_tongue: "Springy tongue", l_none: "None",
   hingeNote: "<b>In place</b>: one pre-assembled closed piece; the pins are grown inside the hinges with 0.45 mm clearance — the first turn breaks them free; print in any orientation (e.g. tilted ~45°). <b>Filament pin</b>: box and lid print separately and flat; push 1.75 mm filament through the ⌀2.1 channel and melt the ends. <b>Snap-on</b>: the lid clips onto rods once (hold it upright at ~90° and press straight down) and only comes off deliberately. The flap latch swings on a grown mini-hinge over a wall lug; the tongue latch clicks over a rib on the front wall.",
   slideNote: "The lid slides into side slots from one end; friction bumps hold it shut and a grip bar helps pull it open. Both parts print flat, no supports.",
   w_walls: "The walls eat the entire volume: at least 1 mm must remain inside.",
@@ -1322,38 +1388,48 @@ fr: {
   title: "Box.STL — Générateur paramétrique de boîtes pour l'impression 3D",
   tag: "OUTIL HORS LIGNE · v1.0",
   intro: "Une boîte paramétrique pour l'impression 3D. Réglez les dimensions et téléchargez un STL binaire prêt à trancher. Travaillez en millimètres ou en pouces ; le STL est toujours exporté en mm.",
-  g1: "Dimensions", g2: "Parois", g3: "Couvercle", g4: "Séparateurs", g5: "Fiche technique",
-  mOuter: "Extérieures", mInner: "Intérieures", uMetric: "Métrique — mm", uImperial: "Impérial — pouces",
+  g1: "Forme", g2: "Dimensions", g3: "Parois", g4: "Couvercle", g5: "Séparateurs", g6: "Fiche technique",
+  mOuter: "Cotes extérieures", mInner: "Cotes intérieures", segMode: "Les valeurs ci-dessous sont",
   shape_rect: "Rectangulaire", shape_cyl: "Cylindrique", f_dia: "Diamètre",
+  lidOn: "Ajouter un couvercle", divOn: "Ajouter des séparateurs", segLidParams: "Cotes du couvercle",
+  kind_lift: "Couvercle amovible", kind_slide: "Couvercle coulissant",
+  segRet: "Ce qui le maintient fermé",
+  ret_friction: "Par friction", ret_hinge: "Charnière et fermoir", ret_screw: "Filetage",
+  fit_inset: "Serre les parois intérieures <small>le couvercle s'emboîte</small>",
+  fit_cap: "Serre les parois extérieures <small>le couvercle coiffe</small>",
   w_cyllid: "Ce type de couvercle n'existe pas pour les boîtes cylindriques — utilisez encastré ou capuchon.",
   segRadial: "Radiaux — secteurs", f_sect: "Secteurs <small>partage égal</small>",
   f_dvpr: "Angles <small>degrés ou % du tour ; prioritaire sur les secteurs</small>",
   ph_r: "ex. 0, 120, 240", s_sect: "secteurs",
   w_sectight: "Des secteurs font moins de 3 mm au bord — ajustez les angles ou le nombre.",
-  lid_screw: "Vissé", f_thr: "Hauteur du filetage",
+  f_thr: "Hauteur du filetage",
   screwNote: "Couvercle à visser type bocal : filet trapézoïdal à 2 entrées (pas 4,5 mm, flancs à 45°), fermé en un demi-tour environ. Les deux pièces s'impriment à plat sans supports ; le jeu d'ajustement règle la liberté du filet.",
   w_screwcyl: "Le couvercle vissé exige une boîte cylindrique.",
   w_thrh: "La hauteur du filetage doit faire au moins 6 mm et laisser 2 mm de paroi en dessous.",
   w_thrdia: "Le couvercle vissé exige un diamètre d'au moins 24 mm.",
   resetTip: "Rétablir la valeur par défaut",
-  f_fbi: "Congé du fond, intérieur <small>renfort à la jonction du fond</small>",
-  f_fbo: "Congé du fond, extérieur <small>arrondit l'arête de la base</small>",
-  w_fbi: "Le congé intérieur du fond est trop grand pour la cavité.",
-  w_fbo: "Le congé extérieur du fond ne peut pas dépasser l'épaisseur des parois.",
+  f_fbi: "Congé du fond <small>renfort à la jonction du fond et des parois</small>",
+  f_flat: "Aplatissement du fond <small>bande d'appui droite sous l'arrondi</small>",
+  autoRound: "L'arête extérieure de la base est arrondie de {0}, d'après le congé (limité par la paroi de {1}). L'aplatissement soulève cet arrondi pour que la boîte repose sur une bande droite.",
+  w_fbi: "Le congé du fond est trop grand pour la cavité.",
+  w_flat: "L'aplatissement et l'arrondi laissent moins de 2 mm de paroi droite.",
   f_len: "Longueur <small>axe X</small>", f_wid: "Largeur <small>axe Y</small>", f_hgt: "Hauteur <small>axe Z</small>",
   f_wall: "Épaisseur des parois", f_bot: "Épaisseur du fond", f_rad: "Rayon des angles <small>0 = angles vifs</small>",
-  f_clr: "Jeu d'ajustement <small>par côté</small>", f_lip: "Hauteur du rebord",
+  f_clr: "Jeu d'ajustement <small></small>",
+  clr_inset: "jeu entre le rebord et la paroi intérieure, par côté",
+  clr_cap: "jeu entre la jupe et la paroi extérieure, par côté",
+  clr_slide: "jeu de la rainure du couvercle coulissant",
+  clr_screw: "souplesse du filetage", f_lip: "Hauteur du rebord",
   f_tor: "Hauteur du corps <small>au-dessus du joint</small>", f_skirt: "Hauteur de la jupe <small>tablier sur les parois</small>",
   f_lidT: "Épaisseur du couvercle",
   f_zones: "Zones <small>partage égal</small>",
   f_dvpx: "Positions <small>en unités ou % depuis la paroi gauche ; prioritaire sur les zones</small>",
   f_dvpy: "Positions <small>en unités ou % depuis la paroi avant ; prioritaire sur les zones</small>",
-  f_divh: "Hauteur <small>0 = pleine hauteur</small>", f_divth: "Épaisseur",
+  f_divh: "Hauteur <small>depuis le fond ; 0 = pleine hauteur</small>", f_divth: "Épaisseur",
   ph_x: "ex. 40, 66%", ph_y: "ex. 25, 50%, 75%",
-  lid_none: "Aucun", lid_inset: "Encastré", lid_cap: "Capuchon", lid_hinge: "À charnière", lid_slide: "Coulissant",
   segHinge: "Charnière", segLatch: "Fermoir",
   segCross: "Transversaux — divisent la longueur", segLength: "Longitudinaux — divisent la largeur",
-  h_pip: "En place", h_pin: "Axe filament", h_snap: "À clipser",
+  h_pip: "Imprimée en place", h_pin: "Axe filament", h_snap: "À clipser",
   l_flap: "Battant", l_tongue: "Languette", l_none: "Aucun",
   hingeNote: "<b>En place</b> : une seule pièce imprimée fermée ; les axes sont formés dans les charnières avec 0,45 mm de jeu — le premier mouvement les libère ; orientation d'impression libre (par ex. inclinée à ~45°). <b>Axe filament</b> : boîte et couvercle s'impriment séparément et à plat ; passez un filament de 1,75 mm dans le canal ⌀2,1 et faites fondre les extrémités. <b>À clipser</b> : le couvercle se clipse une fois sur les axes (tenez-le vertical et appuyez vers le bas) et ne s'enlève que volontairement. Le battant pivote sur une mini-charnière imprimée et s'accroche à un ergot ; la languette s'encliquette sur une nervure de la paroi avant.",
   slideNote: "Le couvercle coulisse dans des rainures latérales depuis une extrémité ; des bossages de friction le maintiennent fermé et une barrette aide à l'ouvrir. Les deux pièces s'impriment à plat, sans supports.",
@@ -1388,38 +1464,48 @@ de: {
   title: "Box.STL — Parametrischer Box-Generator für den 3D-Druck",
   tag: "OFFLINE-WERKZEUG · v1.0",
   intro: "Eine parametrische Box für den 3D-Druck. Maße einstellen — druckfertiges binäres STL herunterladen. In Millimetern oder Zoll arbeiten; das STL wird immer in mm exportiert.",
-  g1: "Abmessungen", g2: "Wände", g3: "Deckel", g4: "Trennwände", g5: "Datenblatt",
-  mOuter: "Außen", mInner: "Innen", uMetric: "Metrisch — mm", uImperial: "Imperial — Zoll",
+  g1: "Form", g2: "Abmessungen", g3: "Wände", g4: "Deckel", g5: "Trennwände", g6: "Datenblatt",
+  mOuter: "Außenmaße", mInner: "Innenmaße", segMode: "Die Werte unten sind",
   shape_rect: "Rechteckig", shape_cyl: "Zylindrisch", f_dia: "Durchmesser",
+  lidOn: "Deckel hinzufügen", divOn: "Trennwände hinzufügen", segLidParams: "Deckelmaße",
+  kind_lift: "Abnehmbarer Deckel", kind_slide: "Schiebedeckel",
+  segRet: "Was ihn geschlossen hält",
+  ret_friction: "Klemmsitz", ret_hinge: "Scharnier und Verschluss", ret_screw: "Gewinde",
+  fit_inset: "Greift die Innenwände <small>Deckel fällt hinein</small>",
+  fit_cap: "Greift die Außenwände <small>Deckel stülpt über</small>",
   w_cyllid: "Dieser Deckeltyp ist für zylindrische Boxen nicht verfügbar — Einlege- oder Stülpdeckel wählen.",
   segRadial: "Radial — Sektoren", f_sect: "Sektoren <small>gleichmäßig</small>",
   f_dvpr: "Winkel <small>Grad oder % der Umdrehung; überschreibt Sektoren</small>",
   ph_r: "z. B. 0, 120, 240", s_sect: "Sektoren",
   w_sectight: "Sektoren werden am Rand schmaler als 3 mm — Winkel oder Anzahl anpassen.",
-  lid_screw: "Schraub", f_thr: "Gewindehöhe",
+  f_thr: "Gewindehöhe",
   screwNote: "Schraubdeckel wie am Einmachglas: zweigängiges Trapezgewinde (4,5 mm Steigung, 45°-Flanken), schließt in etwa einer halben Umdrehung. Beide Teile drucken flach ohne Stützen; das Passungsspiel bestimmt die Gängigkeit.",
   w_screwcyl: "Der Schraubdeckel braucht eine zylindrische Box.",
   w_thrh: "Die Gewindehöhe muss mindestens 6 mm betragen und 2 mm Wand darunter lassen.",
   w_thrdia: "Der Schraubdeckel braucht mindestens 24 mm Durchmesser.",
   resetTip: "Auf Standard zurücksetzen",
-  f_fbi: "Bodenkehle, innen <small>Verstärkung am Bodenübergang</small>",
-  f_fbo: "Bodenrundung, außen <small>rundet die Basiskante</small>",
-  w_fbi: "Die innere Bodenkehle ist zu groß für den Hohlraum.",
-  w_fbo: "Die äußere Bodenrundung darf die Wandstärke nicht überschreiten.",
+  f_fbi: "Bodenkehle <small>Verstärkung am Übergang Boden–Wand</small>",
+  f_flat: "Bodenabflachung <small>gerades Aufstandsband unter der Rundung</small>",
+  autoRound: "Die äußere Bodenkante wird mit {0} gerundet, passend zur Kehle (begrenzt durch die {1} Wand). Die Abflachung hebt diese Rundung an, sodass die Box auf einem geraden Band steht.",
+  w_fbi: "Die Bodenkehle ist zu groß für den Hohlraum.",
+  w_flat: "Abflachung und Bodenrundung lassen unter 2 mm gerade Wand übrig.",
   f_len: "Länge <small>X-Achse</small>", f_wid: "Breite <small>Y-Achse</small>", f_hgt: "Höhe <small>Z-Achse</small>",
   f_wall: "Wandstärke", f_bot: "Bodenstärke", f_rad: "Eckenradius <small>0 = scharfe Ecken</small>",
-  f_clr: "Passungsspiel <small>pro Seite</small>", f_lip: "Lippenhöhe",
+  f_clr: "Passungsspiel <small></small>",
+  clr_inset: "Spalt zwischen Lippe und Innenwand, pro Seite",
+  clr_cap: "Spalt zwischen Schürze und Außenwand, pro Seite",
+  clr_slide: "Nutspiel des Schiebedeckels",
+  clr_screw: "Gängigkeit des Gewindes", f_lip: "Lippenhöhe",
   f_tor: "Deckelkörper-Höhe <small>über der Fuge</small>", f_skirt: "Schürzenhöhe <small>über den Wänden</small>",
   f_lidT: "Deckelstärke",
   f_zones: "Zonen <small>gleichmäßig</small>",
   f_dvpx: "Positionen <small>Längeneinheiten oder % von der linken Innenwand; überschreibt Zonen</small>",
   f_dvpy: "Positionen <small>Längeneinheiten oder % von der vorderen Innenwand; überschreibt Zonen</small>",
-  f_divh: "Höhe <small>0 = volle Höhe</small>", f_divth: "Stärke",
+  f_divh: "Höhe <small>ab Boden; 0 = volle Höhe</small>", f_divth: "Stärke",
   ph_x: "z. B. 40, 66%", ph_y: "z. B. 25, 50%, 75%",
-  lid_none: "Kein", lid_inset: "Einlege", lid_cap: "Stülp", lid_hinge: "Scharnier", lid_slide: "Schiebe",
   segHinge: "Scharnier", segLatch: "Verschluss",
   segCross: "Quer — teilen die Länge", segLength: "Längs — teilen die Breite",
-  h_pip: "Integriert", h_pin: "Filament-Stift", h_snap: "Aufrasten",
+  h_pip: "Direkt mitgedruckt", h_pin: "Filament-Stift", h_snap: "Aufrasten",
   l_flap: "Klappe", l_tongue: "Zunge", l_none: "Kein",
   hingeNote: "<b>Integriert</b>: ein fertig montiert gedrucktes, geschlossenes Teil; die Stifte wachsen mit 0,45 mm Spiel in den Scharnieren — die erste Drehung löst sie; Druckausrichtung beliebig (z. B. ~45° geneigt). <b>Filament-Stift</b>: Box und Deckel drucken getrennt und flach; 1,75-mm-Filament durch den ⌀2,1-Kanal schieben und die Enden verschmelzen. <b>Aufrasten</b>: Der Deckel rastet einmal auf die Stangen (senkrecht halten und nach unten drücken) und löst sich nur absichtlich. Die Klappe schwingt an einem gedruckten Mini-Scharnier über einen Wandnocken; die Zunge rastet über eine Rippe der Vorderwand.",
   slideNote: "Der Deckel gleitet von einer Seite in seitliche Nuten; Reibnoppen halten ihn geschlossen, eine Griffleiste hilft beim Öffnen. Beide Teile drucken flach, ohne Stützen.",
@@ -1454,38 +1540,48 @@ es: {
   title: "Box.STL — Generador paramétrico de cajas para impresión 3D",
   tag: "HERRAMIENTA SIN CONEXIÓN · v1.0",
   intro: "Una caja paramétrica para impresión 3D. Define las dimensiones y descarga un STL binario listo para laminar. Trabaja en milímetros o pulgadas; el STL siempre se exporta en mm.",
-  g1: "Dimensiones", g2: "Paredes", g3: "Tapa", g4: "Divisores", g5: "Ficha técnica",
-  mOuter: "Exteriores", mInner: "Interiores", uMetric: "Métrico — mm", uImperial: "Imperial — pulgadas",
+  g1: "Forma", g2: "Dimensiones", g3: "Paredes", g4: "Tapa", g5: "Divisores", g6: "Ficha técnica",
+  mOuter: "Medidas exteriores", mInner: "Medidas interiores", segMode: "Los valores de abajo son",
   shape_rect: "Rectangular", shape_cyl: "Cilíndrica", f_dia: "Diámetro",
+  lidOn: "Añadir tapa", divOn: "Añadir divisores", segLidParams: "Medidas de la tapa",
+  kind_lift: "Tapa extraíble", kind_slide: "Tapa deslizante",
+  segRet: "Qué la mantiene cerrada",
+  ret_friction: "Ajuste por fricción", ret_hinge: "Bisagra y cierre", ret_screw: "Rosca",
+  fit_inset: "Agarra las paredes interiores <small>la tapa encaja dentro</small>",
+  fit_cap: "Agarra las paredes exteriores <small>la tapa cubre por fuera</small>",
   w_cyllid: "Este tipo de tapa no está disponible para cajas cilíndricas — usa encajada o exterior.",
   segRadial: "Radiales — sectores", f_sect: "Sectores <small>partes iguales</small>",
   f_dvpr: "Ángulos <small>grados o % de la vuelta; anula los sectores</small>",
   ph_r: "p. ej. 0, 120, 240", s_sect: "sectores",
   w_sectight: "Hay sectores de menos de 3 mm en el borde — ajusta los ángulos o el número.",
-  lid_screw: "Roscada", f_thr: "Altura de la rosca",
+  f_thr: "Altura de la rosca",
   screwNote: "Tapa de rosca tipo frasco: rosca trapezoidal de 2 entradas (paso 4,5 mm, flancos a 45°), cierra en media vuelta aproximadamente. Ambas piezas se imprimen en plano sin soportes; la holgura de ajuste regula la suavidad de la rosca.",
   w_screwcyl: "La tapa roscada necesita una caja cilíndrica.",
   w_thrh: "La altura de la rosca debe ser de al menos 6 mm y dejar 2 mm de pared debajo.",
   w_thrdia: "La tapa roscada necesita un diámetro de al menos 24 mm.",
   resetTip: "Restablecer el valor predeterminado",
-  f_fbi: "Redondeo del fondo, interior <small>refuerzo en la unión del fondo</small>",
-  f_fbo: "Redondeo del fondo, exterior <small>suaviza el borde de la base</small>",
-  w_fbi: "El redondeo interior del fondo es demasiado grande para la cavidad.",
-  w_fbo: "El redondeo exterior del fondo no puede superar el grosor de pared.",
+  f_fbi: "Redondeo del fondo <small>refuerzo en la unión del fondo y las paredes</small>",
+  f_flat: "Aplanado del fondo <small>banda recta de apoyo bajo el redondeo</small>",
+  autoRound: "El borde exterior de la base se redondea {0}, siguiendo el redondeo interior (limitado por la pared de {1}). El aplanado eleva ese redondeo para que la caja apoye sobre una banda recta.",
+  w_fbi: "El redondeo del fondo es demasiado grande para la cavidad.",
+  w_flat: "El aplanado y el redondeo dejan menos de 2 mm de pared recta.",
   f_len: "Longitud <small>eje X</small>", f_wid: "Anchura <small>eje Y</small>", f_hgt: "Altura <small>eje Z</small>",
   f_wall: "Grosor de pared", f_bot: "Grosor del fondo", f_rad: "Radio de esquinas <small>0 = esquinas vivas</small>",
-  f_clr: "Holgura de ajuste <small>por lado</small>", f_lip: "Altura del labio",
+  f_clr: "Holgura de ajuste <small></small>",
+  clr_inset: "hueco entre el labio y la pared interior, por lado",
+  clr_cap: "hueco entre el faldón y la pared exterior, por lado",
+  clr_slide: "holgura de la ranura de la tapa deslizante",
+  clr_screw: "suavidad de la rosca", f_lip: "Altura del labio",
   f_tor: "Altura del cuerpo <small>sobre la junta</small>", f_skirt: "Altura del faldón <small>sobre las paredes</small>",
   f_lidT: "Grosor de la tapa",
   f_zones: "Zonas <small>partes iguales</small>",
   f_dvpx: "Posiciones <small>unidades o % desde la pared izquierda; anula las zonas</small>",
   f_dvpy: "Posiciones <small>unidades o % desde la pared frontal; anula las zonas</small>",
-  f_divh: "Altura <small>0 = altura completa</small>", f_divth: "Grosor",
+  f_divh: "Altura <small>desde el fondo; 0 = altura completa</small>", f_divth: "Grosor",
   ph_x: "p. ej. 40, 66%", ph_y: "p. ej. 25, 50%, 75%",
-  lid_none: "Sin tapa", lid_inset: "Encajada", lid_cap: "Exterior", lid_hinge: "Con bisagra", lid_slide: "Deslizante",
   segHinge: "Bisagra", segLatch: "Cierre",
   segCross: "Transversales — dividen la longitud", segLength: "Longitudinales — dividen la anchura",
-  h_pip: "Integrada", h_pin: "Eje de filamento", h_snap: "A presión",
+  h_pip: "Impresa integrada", h_pin: "Eje de filamento", h_snap: "A presión",
   l_flap: "Aldaba", l_tongue: "Lengüeta", l_none: "Sin cierre",
   hingeNote: "<b>Integrada</b>: una sola pieza impresa cerrada; los ejes crecen dentro de las bisagras con 0,45 mm de holgura — el primer giro los libera; imprime en cualquier orientación (p. ej. inclinada ~45°). <b>Eje de filamento</b>: caja y tapa se imprimen por separado y en plano; pasa filamento de 1,75 mm por el canal de ⌀2,1 y funde los extremos. <b>A presión</b>: la tapa se encaja una vez en los ejes (sostenla vertical y presiona hacia abajo) y solo se quita a propósito. La aldaba oscila sobre una mini-bisagra impresa y cuelga de un diente de la pared; la lengüeta encaja sobre un nervio de la pared frontal.",
   slideNote: "La tapa se desliza por ranuras laterales desde un extremo; unos resaltes de fricción la mantienen cerrada y una barra ayuda a abrirla. Ambas piezas se imprimen en plano, sin soportes.",
@@ -1520,35 +1616,45 @@ zh: {
   title: "Box.STL — 3D 打印参数化盒子生成器",
   tag: "离线工具 · v1.0",
   intro: "面向 3D 打印的参数化盒子。设定尺寸，下载可直接切片的二进制 STL。可用毫米或英寸；STL 始终以 mm 导出。",
-  g1: "尺寸", g2: "壁", g3: "盖子", g4: "隔板", g5: "参数表",
-  mOuter: "外部尺寸", mInner: "内部尺寸", uMetric: "公制 — 毫米", uImperial: "英制 — 英寸",
+  g1: "形状", g2: "尺寸", g3: "壁", g4: "盖子", g5: "隔板", g6: "参数表",
+  mOuter: "外部尺寸", mInner: "内部尺寸", segMode: "下方数值表示",
   shape_rect: "矩形", shape_cyl: "圆柱形", f_dia: "直径",
+  lidOn: "添加盖子", divOn: "添加隔板", segLidParams: "盖子尺寸",
+  kind_lift: "可取下的盖", kind_slide: "滑盖",
+  segRet: "靠什么保持闭合",
+  ret_friction: "摩擦配合", ret_hinge: "铰链加锁扣", ret_screw: "螺纹",
+  fit_inset: "卡住内壁 <small>盖子嵌入</small>",
+  fit_cap: "卡住外壁 <small>盖子扣在外面</small>",
   w_cyllid: "圆柱形盒子不支持此盖型——请选内嵌盖或套盖。",
   segRadial: "径向 — 扇区分割", f_sect: "扇区 <small>均分</small>",
   f_dvpr: "角度 <small>度数或整圈的 %；优先于扇区</small>",
   ph_r: "例：0, 120, 240", s_sect: "扇区",
   w_sectight: "扇区在边缘处窄于 3 mm——请调整角度或数量。",
-  lid_screw: "螺纹盖", f_thr: "螺纹高度",
+  f_thr: "螺纹高度",
   screwNote: "罐头式螺纹盖：双头梯形螺纹（螺距 4.5 mm，45° 牙侧），约半圈拧紧。两件平放打印无需支撑；配合间隙决定旋合松紧。",
   w_screwcyl: "螺纹盖需要圆柱形盒子。",
   w_thrh: "螺纹高度至少 6 mm，且下方需留 2 mm 壁高。",
   w_thrdia: "螺纹盖需要直径不小于 24 mm。",
   resetTip: "恢复默认值",
-  f_fbi: "底部圆角，内 <small>底与壁交界处的加强圆角</small>",
-  f_fbo: "底部圆角，外 <small>底座外缘倒圆</small>",
-  w_fbi: "内部底圆角对内腔来说太大了。",
-  w_fbo: "外部底圆角不能超过壁厚。",
+  f_fbi: "底部圆角 <small>底与壁交界处的加强圆角</small>",
+  f_flat: "底部找平 <small>圆角下方的平直支承带</small>",
+  autoRound: "底座外缘按内圆角自动倒圆 {0}（受 {1} 壁厚限制）。找平会把该圆角抬离底面，使盒子落在一圈平直带上。",
+  w_fbi: "底部圆角对内腔来说太大了。",
+  w_flat: "找平加上底部倒圆后，平直壁不足 2 mm。",
   f_len: "长度 <small>X 轴</small>", f_wid: "宽度 <small>Y 轴</small>", f_hgt: "高度 <small>Z 轴</small>",
   f_wall: "壁厚", f_bot: "底厚", f_rad: "圆角半径 <small>0 = 直角</small>",
-  f_clr: "配合间隙 <small>每侧</small>", f_lip: "内唇高度",
+  f_clr: "配合间隙 <small></small>",
+  clr_inset: "内唇与内壁之间的间隙（每侧）",
+  clr_cap: "裙边与外壁之间的间隙（每侧）",
+  clr_slide: "滑盖滑槽的间隙",
+  clr_screw: "螺纹旋合的松紧", f_lip: "内唇高度",
   f_tor: "盖体高度 <small>接缝以上</small>", f_skirt: "裙边高度 <small>包住外壁</small>",
   f_lidT: "盖厚",
   f_zones: "分区 <small>均分</small>",
   f_dvpx: "位置 <small>长度单位或 %，从左内壁起；优先于分区</small>",
   f_dvpy: "位置 <small>长度单位或 %，从前内壁起；优先于分区</small>",
-  f_divh: "高度 <small>0 = 全高</small>", f_divth: "厚度",
+  f_divh: "高度 <small>从内底起算；0 = 全高</small>", f_divth: "厚度",
   ph_x: "例：40, 66%", ph_y: "例：25, 50%, 75%",
-  lid_none: "无", lid_inset: "内嵌盖", lid_cap: "套盖", lid_hinge: "铰链盖", lid_slide: "滑盖",
   segHinge: "铰链", segLatch: "锁扣",
   segCross: "横向 — 分割长度", segLength: "纵向 — 分割宽度",
   h_pip: "一体打印", h_pin: "耗材轴", h_snap: "卡扣",
@@ -1586,38 +1692,48 @@ ru: {
   title: "Box.STL — параметрический генератор коробок для 3D-печати",
   tag: "ОФЛАЙН-ИНСТРУМЕНТ · v1.0",
   intro: "Параметрическая коробка для 3D-печати. Задайте размеры — скачайте готовый бинарный STL. Работайте в миллиметрах или дюймах; STL всегда экспортируется в мм.",
-  g1: "Габариты", g2: "Стенки", g3: "Крышка", g4: "Перегородки", g5: "Паспорт детали",
-  mOuter: "Внешние", mInner: "Внутренние", uMetric: "Метрическая — мм", uImperial: "Имперская — дюймы",
+  g1: "Форма", g2: "Габариты", g3: "Стенки", g4: "Крышка", g5: "Перегородки", g6: "Паспорт детали",
+  mOuter: "Наружные размеры", mInner: "Внутренние размеры", segMode: "Значения ниже — это",
   shape_rect: "Прямоугольная", shape_cyl: "Цилиндр", f_dia: "Диаметр",
+  lidOn: "Добавить крышку", divOn: "Добавить перегородки", segLidParams: "Размеры крышки",
+  kind_lift: "Съёмная крышка", kind_slide: "Задвижная крышка",
+  segRet: "Чем держится закрытой",
+  ret_friction: "Трением", ret_hinge: "Петля и замок", ret_screw: "Резьбой",
+  fit_inset: "Держится за внутренние стенки <small>вкладывается внутрь</small>",
+  fit_cap: "Держится за наружные стенки <small>надевается сверху</small>",
   w_cyllid: "Этот тип крышки недоступен для цилиндра — выберите вкладную или колпачок.",
   segRadial: "Радиальные — деление на секторы", f_sect: "Секторы <small>поровну</small>",
   f_dvpr: "Углы <small>в градусах или % оборота; важнее секторов</small>",
   ph_r: "напр. 0, 120, 240", s_sect: "секторы",
   w_sectight: "Секторы у кромки уже 3 мм — измените углы или количество.",
-  lid_screw: "Резьбовая", f_thr: "Высота резьбы",
+  f_thr: "Высота резьбы",
   screwNote: "Крышка-банка: двухзаходная трапецеидальная резьба (шаг 4,5 мм, склоны 45°), закрывается примерно за пол-оборота. Обе детали печатаются плоско без поддержек; зазор посадки задаёт лёгкость хода резьбы.",
   w_screwcyl: "Резьбовой крышке нужна цилиндрическая коробка.",
   w_thrh: "Высота резьбы — от 6 мм, и под ней должно оставаться 2 мм стенки.",
   w_thrdia: "Резьбовой крышке нужен диаметр от 24 мм.",
   resetTip: "Вернуть значение по умолчанию",
-  f_fbi: "Галтель дна, внутренняя <small>усиление стыка дна и стенок</small>",
-  f_fbo: "Скругление дна, внешнее <small>наружная кромка основания</small>",
-  w_fbi: "Внутренняя галтель дна слишком велика для полости.",
-  w_fbo: "Внешнее скругление дна не может превышать толщину стенки.",
+  f_fbi: "Галтель дна <small>усиление стыка дна и стенок</small>",
+  f_flat: "Выпрямление дна <small>прямой опорный поясок под скруглением</small>",
+  autoRound: "Наружная кромка основания скругляется на {0} — по галтели (не больше стенки {1}). Выпрямление поднимает это скругление над столом, и коробка встаёт на прямой поясок.",
+  w_fbi: "Галтель дна слишком велика для полости.",
+  w_flat: "Выпрямление вместе со скруглением оставляет меньше 2 мм прямой стенки.",
   f_len: "Длина <small>ось X</small>", f_wid: "Ширина <small>ось Y</small>", f_hgt: "Высота <small>ось Z</small>",
   f_wall: "Толщина стенки", f_bot: "Толщина дна", f_rad: "Скругление углов <small>0 = острые</small>",
-  f_clr: "Зазор посадки <small>на сторону</small>", f_lip: "Высота бортика",
+  f_clr: "Зазор посадки <small></small>",
+  clr_inset: "между бортиком и внутренней стенкой, на сторону",
+  clr_cap: "между юбкой и наружной стенкой, на сторону",
+  clr_slide: "зазор паза задвижной крышки",
+  clr_screw: "лёгкость хода резьбы", f_lip: "Высота бортика",
   f_tor: "Высота торса <small>над стыком</small>", f_skirt: "Высота юбки <small>фартук по стенкам</small>",
   f_lidT: "Толщина крышки",
   f_zones: "Зоны <small>поровну</small>",
   f_dvpx: "Позиции <small>в единицах длины или % от левой стенки; важнее зон</small>",
   f_dvpy: "Позиции <small>в единицах длины или % от передней стенки; важнее зон</small>",
-  f_divh: "Высота <small>0 = на всю высоту</small>", f_divth: "Толщина",
+  f_divh: "Высота <small>от дна полости; 0 = на всю высоту</small>", f_divth: "Толщина",
   ph_x: "напр. 40, 66%", ph_y: "напр. 25, 50%, 75%",
-  lid_none: "Нет", lid_inset: "Вкладная", lid_cap: "Колпачок", lid_hinge: "На петле", lid_slide: "Задвижная",
   segHinge: "Петля", segLatch: "Замок",
   segCross: "Поперечные — делят длину", segLength: "Продольные — делят ширину",
-  h_pip: "В сборе", h_pin: "Пруток", h_snap: "Защёлка",
+  h_pip: "Печать в сборе", h_pin: "Ось-пруток", h_snap: "Защёлка",
   l_flap: "Хлястик", l_tongue: "Язычок", l_none: "Нет",
   hingeNote: "<b>В сборе</b>: одна деталь, напечатанная закрытой; оси выращены внутри шарниров с зазором 0,45 мм — первый поворот их освобождает; ориентация печати любая (например, с наклоном ~45°). <b>Пруток</b>: коробка и крышка печатаются раздельно и плоско; проденьте филамент 1,75 мм в канал ⌀2,1 и оплавьте концы. <b>Защёлка</b>: крышка один раз защёлкивается на стержни (держите её вертикально и нажмите вниз) и снимается только намеренно. Хлястик качается на выращенной мини-петле и виснет на зубе стенки; язычок защёлкивается на ребре передней стенки.",
   slideNote: "Крышка задвигается в боковые пазы с торца; фрикционные бугорки удерживают её, планка-ручка помогает открыть. Обе детали печатаются плоско, без поддержек.",
@@ -1658,24 +1774,17 @@ function applyLang() {
   $("hdrTag").textContent = T("tag");
   document.querySelector("header p").innerHTML = T("intro");
   document.querySelectorAll(".group-title").forEach((el, i) =>
-    el.innerHTML = `<span class="num">0${i + 1}</span> ${T("g" + (i + 1))}`);
-  const segs = {
-    modeSeg: ["mode", { outer: "mOuter", inner: "mInner" }],
-    unitSeg: ["unit", { mm: "uMetric", in: "uImperial" }],
-    shapeSeg: ["shape", { rect: "shape_rect", cyl: "shape_cyl" }],
-    lidSeg:  ["lid", { none: "lid_none", inset: "lid_inset", cap: "lid_cap", hinge: "lid_hinge", slide: "lid_slide", screw: "lid_screw" }],
-    hingeSeg:["hinge", { pip: "h_pip", pin: "h_pin", snap: "h_snap" }],
-    latchSeg:["latch", { flap: "l_flap", tongue: "l_tongue", none: "l_none" }],
-  };
-  for (const [segId, [attr, map]] of Object.entries(segs))
-    $(segId).querySelectorAll("button").forEach(b => b.textContent = T(map[b.dataset[attr]]));
+    el.innerHTML = `<span class="num">0${i + 1}</span> ${T("g" + (i + 1))}<span class="chev">▼</span>`);
+  // every translatable label carries its own key, so reordering the panel
+  // can never shuffle the translations
+  document.querySelectorAll("[data-i18n]").forEach(el => el.innerHTML = T(el.dataset.i18n));
   const labels = {
     len: "f_len", wid: "f_wid", hgt: "f_hgt", dia: "f_dia", wall: "f_wall", bot: "f_bot", rad: "f_rad",
     clr: "f_clr", lip: "f_lip", tor: "f_tor", skirt: "f_skirt", lidT: "f_lidT",
     zx: "f_zones", zy: "f_zones", dvpx: "f_dvpx", dvpy: "f_dvpy",
     dvhx: "f_divh", dvhy: "f_divh", dvtx: "f_divth", dvty: "f_divth",
     zr: "f_sect", dvpr: "f_dvpr", dvhr: "f_divh", dvtr: "f_divth", thr: "f_thr",
-    fbi: "f_fbi", fbo: "f_fbo",
+    fbi: "f_fbi", flat: "f_flat",
   };
   document.querySelectorAll(".field").forEach(f => {
     const inp = f.querySelector("input");
@@ -1684,8 +1793,6 @@ function applyLang() {
   $("dvpx").placeholder = T("ph_x");
   $("dvpy").placeholder = T("ph_y");
   $("dvpr").placeholder = T("ph_r");
-  const segLabels = ["segHinge", "segLatch", "segCross", "segLength", "segRadial"];
-  document.querySelectorAll(".seg-label").forEach((el, i) => el.textContent = T(segLabels[i]));
   $("hingeNote").innerHTML = T("hingeNote");
   $("slideNote").innerHTML = T("slideNote");
   $("screwNote").innerHTML = T("screwNote");
@@ -1696,6 +1803,18 @@ function applyLang() {
   syncLidUI();
 }
 
+// write a section's current choice into its heading (shown when folded)
+function setSummary(el, text) {
+  const title = el.closest(".group").querySelector(".group-title");
+  let s = title.querySelector(".sum");
+  if (!s) {
+    s = document.createElement("span");
+    s.className = "sum";
+    title.appendChild(s);
+  }
+  s.textContent = text;
+}
+
 function rebuild() {
   const raw = {
     len: val("len"), wid: val("wid"), hgt: val("hgt"),
@@ -1704,7 +1823,7 @@ function rebuild() {
     lidT: val("lidT"), tor: val("tor"), zx: cnt("zx"), zy: cnt("zy"),
     dvhx: val("dvhx"), dvhy: val("dvhy"), dvtx: val("dvtx"), dvty: val("dvty"),
     dia: val("dia"), zr: cnt("zr"), dvhr: val("dvhr"), dvtr: val("dvtr"),
-    thr: val("thr"), fbi: val("fbi"), fbo: val("fbo"),
+    thr: val("thr"), fbi: val("fbi"), flat: val("flat"),
   };
   if (Object.values(raw).some(x => !isFinite(x))) return; // number still being typed — wait
 
@@ -1723,11 +1842,14 @@ function rebuild() {
   else { L = raw.len + 2*raw.wall; W = raw.wid + 2*raw.wall; R = raw.rad + raw.wall; }
   const nx = Math.max(1, Math.round(raw.zx)), ny = Math.max(1, Math.round(raw.zy));
   const ix = L/2 - raw.wall, iy = W/2 - raw.wall;
-  const px = parseDivPositions($("dvpx").value, nx, 2*ix); // crosswise dividers
-  const py = parseDivPositions($("dvpy").value, ny, 2*iy); // lengthwise dividers
+  // the outer bottom edge round follows the fillet, capped by the wall
+  const fo = Math.min(raw.fbi, raw.wall);
+  const divOn = $("divOn").checked;
+  const px = divOn ? parseDivPositions($("dvpx").value, nx, 2*ix) : { pos: [], bad: false };
+  const py = divOn ? parseDivPositions($("dvpy").value, ny, 2*iy) : { pos: [], bad: false };
   const zsx = zoneSizes(px.pos, 2*ix, raw.dvtx);           // zone sizes along the length
   const zsy = zoneSizes(py.pos, 2*iy, raw.dvty);           // zone sizes along the width
-  const pr = shape === "cyl"                               // radial dividers (cylinders only)
+  const pr = shape === "cyl" && divOn                       // radial dividers (cylinders only)
     ? parseAngles($("dvpr").value, Math.max(1, Math.round(raw.zr)))
     : { ang: [], bad: false, custom: false };
 
@@ -1778,7 +1900,7 @@ function rebuild() {
     warnings.push(T("w_divparth"));
   if (raw.fbi > 0 && (raw.fbi > Math.min(L, W)/2 - raw.wall - 1 || raw.fbi > H - raw.bottom - 2))
     warnings.push(T("w_fbi"));
-  if (raw.fbo > raw.wall) warnings.push(T("w_fbo"));
+  if (raw.flat > 0 && fo > 0.05 && raw.flat + fo > H - 2) warnings.push(T("w_flat"));
 
   const ok = warnings.length === 0;
   let boxTris = [], lidTris = [];
@@ -1788,21 +1910,21 @@ function rebuild() {
       const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, hingeKind);
       divTop = g.rimTop;
       if (hingeKind === "pip") {
-        base = buildHingedPip(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, latchKind, raw.fbo);
+        base = buildHingedPip(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, latchKind, fo, raw.flat);
       } else {
-        base = buildHingedBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, hingeKind, latchKind, raw.fbo);
+        base = buildHingedBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.tor, hingeKind, latchKind, fo, raw.flat);
         lidTris = clean(buildHingedLidLocal(L, W, H, raw.wall, R, raw.lidT, raw.tor, hingeKind, latchKind));
       }
     } else if (lidType === "slide") {
       divTop = slideLayout(H, raw.lidT, raw.clr).h1 - 0.2;
-      base = buildSlideBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.clr, raw.fbo);
+      base = buildSlideBox(L, W, H, raw.wall, raw.bottom, R, raw.lidT, raw.clr, fo, raw.flat);
       lidTris = clean(buildSlideLid(L, W, raw.wall, R, raw.lidT, raw.clr));
     } else if (lidType === "screw") {
-      base = buildScrewBox(L, H, raw.wall, raw.bottom, raw.thr, raw.fbo);
+      base = buildScrewBox(L, H, raw.wall, raw.bottom, raw.thr, fo, raw.flat);
       lidTris = clean(buildScrewLid(L, raw.wall, raw.clr, raw.thr, raw.lidT));
     } else {
       if (lidType === "inset") divTop = H - raw.lip - 0.3;
-      base = buildBox(L, W, H, raw.wall, raw.bottom, R, raw.fbo);
+      base = buildBox(L, W, H, raw.wall, raw.bottom, R, fo, raw.flat);
       if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT, raw.tor, raw.skirt));
       if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT, raw.tor));
     }
@@ -1834,6 +1956,36 @@ function rebuild() {
   const plastic = v => unit === "in" // v in cm³ → volume · PLA weight
     ? `${fmt(v / 16.387, 2)} <i>in³</i> · ${fmt(v * 1.24 / 28.35, 2)} <i>${T("u_oz")}</i>`
     : `${fmt(v)} <i>cm³</i> · ${fmt(v * 1.24)} <i>${T("u_g")}</i>`;
+  // a filled-in position list wins over the zone count — say so by
+  // greying out the stepper it overrides instead of leaving it live
+  for (const [txt, cnt] of [["dvpx", "zx"], ["dvpy", "zy"], ["dvpr", "zr"]]) {
+    const dead = $(txt).value.trim() !== "";
+    const f = $(cnt).closest(".field");
+    f.style.opacity = dead ? .4 : "";
+    f.querySelectorAll("input, button").forEach(e => e.disabled = dead);
+  }
+
+  // folded sections keep stating their choice — the lid especially, since
+  // it decides which other fields exist at all
+  const plain = k => T(k).replace(/<small>.*<\/small>/, "").trim();
+  setSummary($("shapeSeg"), plain(shape === "cyl" ? "shape_cyl" : "shape_rect"));
+  setSummary($("lidOn"), lidType === "none" ? "—"
+    : lidType === "slide" ? plain("kind_slide")
+    : lidType === "hinge" ? plain("ret_hinge")
+    : lidType === "screw" ? plain("ret_screw")
+    : plain(lidType === "cap" ? "fit_cap" : "fit_inset"));
+  setSummary($("divOn"), divOn
+    ? `${px.pos.length + 1} × ${py.pos.length + 1}${pr.ang.length >= 2 ? ` · ${pr.ang.length}` : ""}`
+    : "—");
+
+  // derived outer round: spell it out instead of making it a knob
+  $("filletNote").style.display = fo > 0.05 ? "" : "none";
+  $("fFlat").style.display = fo > 0.05 ? "" : "none";
+  if (fo > 0.05)
+    $("filletNote").innerHTML = T("autoRound")
+      .replace("{0}", `<b>${fmtL(fo)} ${unit}</b>`)
+      .replace("{1}", `${fmtL(raw.wall)} ${unit}`);
+
   let statsHtml = "";
   if (ok) {
     const volBox = meshVolume(boxTris) / 1000; // cm³
@@ -2093,12 +2245,11 @@ document.querySelectorAll(".stepper").forEach(st => {
   });
 });
 
-// unit system: display-side conversion only — geometry and STL stay in mm
-$("unitSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const next = btn.dataset.unit;
+// unit system: a display preference over every number in and out, so it
+// lives in the header beside the language — not among the box parameters
+$("unitSel").addEventListener("change", () => {
+    const next = $("unitSel").value;
     if (next === unit) return;
-    $("unitSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
     const f = next === "in" ? 1 / IN : IN;
     document.querySelectorAll(".stepper input").forEach(inp => {
       if (inp.dataset.int) return;
@@ -2118,24 +2269,16 @@ $("unitSeg").querySelectorAll("button").forEach(btn => {
     });
     unit = next;
     rebuild();
-  });
 });
 
 // divider position lists
 document.querySelectorAll(".txt").forEach(inp => inp.addEventListener("input", rebuild));
 
-// dimension mode switch
-$("modeSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (btn.dataset.mode === mode) return;
-    mode = btn.dataset.mode;
-    $("modeSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
-    rebuild();
-  });
-});
+// dimension mode: what the numbers below refer to
+$("modeSeg").addEventListener("change", () => { mode = radioVal("mode"); rebuild(); });
 
-// box shape switch: cylinder hides L/W/corner fields and rules out
-// the hinged and sliding lids (they need straight walls)
+// box shape: a cylinder swaps length/width/corner for a diameter, opens
+// the radial dividers, and changes which lids are possible
 function syncShapeUI() {
   const cyl = shape === "cyl";
   $("fDia").style.display = cyl ? "" : "none";
@@ -2143,52 +2286,110 @@ function syncShapeUI() {
   $("fWid").style.display = cyl ? "none" : "";
   $("fRad").style.display = cyl ? "none" : "";
   $("divRadial").style.display = cyl ? "" : "none";
-  $("lidSeg").querySelectorAll("button").forEach(b => {
-    const na = cyl ? (b.dataset.lid === "hinge" || b.dataset.lid === "slide")
-                   : b.dataset.lid === "screw";
-    b.disabled = na;
-    b.style.opacity = na ? .35 : "";
-    b.style.cursor = na ? "not-allowed" : "";
-  });
+  syncLidUI();
 }
-$("shapeSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    if (btn.dataset.shape === shape) return;
-    shape = btn.dataset.shape;
-    setSeg("shapeSeg", "shape", shape);
-    const na = shape === "cyl" ? (lidType === "hinge" || lidType === "slide")
-                               : lidType === "screw";
-    if (na) {
-      lidType = "inset";
-      setSeg("lidSeg", "lid", lidType);
-      syncLidUI();
-    }
-    syncShapeUI();
-    rebuild();
-  });
+$("shapeSeg").addEventListener("change", () => {
+  shape = radioVal("shape");
+  // a lid the new shape can't build falls back to the friction fit
+  const na = shape === "cyl" ? (lidType === "hinge" || lidType === "slide")
+                             : lidType === "screw";
+  if (na) { lidType = "inset"; treeFromLidType(); }
+  syncShapeUI();
+  rebuild();
 });
 
-// lid type: which fields are visible for each option
+/* ── lid choice tree ──
+   The panel asks its questions in dependency order — is there a lid, does
+   it lift off or slide, what holds it shut, which face does it grip — and
+   the answers fold into the single lidType the builders take. */
 const LID_FIELDS = {
   none:  [],
   inset: ["fClr", "fLip", "fTor", "fSkirt", "fLidT"],
   cap:   ["fClr", "fTor", "fSkirt", "fLidT"],
-  hinge: ["hingeOpts", "fTor", "fLidT", "hingeNote"],
+  hinge: ["fTor", "fLidT", "hingeNote"],
   slide: ["fClr", "fLidT", "slideNote"],
   screw: ["fClr", "fThr", "fLidT", "screwNote"],
 };
 const ALL_LID_IDS = [...new Set(Object.values(LID_FIELDS).flat())];
 
+const radioVal = name => document.querySelector(`input[name="${name}"]:checked`)?.value;
+const setRadio = (name, v) => {
+  const el = document.querySelector(`input[name="${name}"][value="${v}"]`);
+  if (el) el.checked = true;
+};
+const disableRadio = (name, v, off) => {
+  const el = document.querySelector(`input[name="${name}"][value="${v}"]`);
+  if (el) el.disabled = off;
+};
+
+function lidTypeFromTree() { // answers → lidType
+  if (!$("lidOn").checked) return "none";
+  if (radioVal("kind") === "slide") return "slide";
+  const ret = radioVal("ret");
+  if (ret === "hinge") return "hinge";
+  if (ret === "screw") return "screw";
+  return radioVal("fit") === "cap" ? "cap" : "inset";
+}
+
+function treeFromLidType() { // lidType → answers (hash links, history)
+  $("lidOn").checked = lidType !== "none";
+  setRadio("kind", lidType === "slide" ? "slide" : "lift");
+  setRadio("ret", lidType === "hinge" ? "hinge" : lidType === "screw" ? "screw" : "friction");
+  if (lidType === "cap" || lidType === "inset") setRadio("fit", lidType);
+  setRadio("hinge", hingeKind);
+  setRadio("latch", latchKind);
+}
+
 function syncLidUI() {
+  const cyl = shape === "cyl";
+  // a thread needs a round wall; hinges and slide slots need straight ones
+  disableRadio("kind", "slide", cyl);
+  disableRadio("ret", "hinge", cyl);
+  disableRadio("ret", "screw", !cyl);
+
+  const on = lidType !== "none";
+  $("lidTree").style.display = on ? "" : "none";
+  $("liftTree").style.display = lidType === "slide" ? "none" : "";
+  $("fitTree").style.display = lidType === "cap" || lidType === "inset" ? "" : "none";
+  $("hingeOpts").style.display = lidType === "hinge" ? "" : "none";
+  $("segLidParams").style.display = on ? "" : "none";
+
   for (const id of ALL_LID_IDS) $(id).style.display = "none";
   for (const id of LID_FIELDS[lidType]) $(id).style.display = "";
+
+  // one label, four different gaps — name the one in play
+  const small = $("fClr").querySelector("small");
+  if (small && I18N.en["clr_" + lidType]) small.textContent = T("clr_" + lidType);
+
   const single = lidType === "none" || (lidType === "hinge" && hingeKind === "pip");
   $("dlLid").style.display = single ? "none" : "";
-  $("dlLid").querySelector("span").textContent =
-    lidType === "cap" ? T("dl_cap") : T("dl_lid");
+  $("dlLid").querySelector("span").textContent = lidType === "cap" ? T("dl_cap") : T("dl_lid");
   $("dlBox").querySelector("span").textContent =
     lidType === "hinge" && hingeKind === "pip" ? T("dl_both") : T("dl_box");
 }
+
+function onLidTreeChange() {
+  lidType = lidTypeFromTree();
+  hingeKind = radioVal("hinge") || hingeKind;
+  latchKind = radioVal("latch") || latchKind;
+  if (lidType === "cap" && val("skirt") < 2) $("skirt").value = 8; // a cap needs its skirt
+  if (lidType === "screw" && val("clr") < 0.25)                    // threads like a freer fit
+    $("clr").value = unit === "in" ? +(0.3 / IN).toFixed(4) : 0.3;
+  syncLidUI();
+  rebuild();
+}
+for (const id of ["lidOn", "kindSeg", "retSeg", "fitSeg", "hingeSeg", "latchSeg"])
+  $(id).addEventListener("change", onLidTreeChange);
+
+// dividers are opt-in; switching them on with untouched settings seeds a split
+const DIV_IDS = ["zx", "zy", "dvpx", "dvpy", "dvhx", "dvhy", "dvtx", "dvty", "zr", "dvpr", "dvhr", "dvtr"];
+const dividersTouched = () => DIV_IDS.some(id => $(id).value !== defVal(id));
+$("divOn").addEventListener("change", () => {
+  const on = $("divOn").checked;
+  $("divTree").style.display = on ? "" : "none";
+  if (on && !dividersTouched()) $(shape === "cyl" ? "zr" : "zx").value = 2;
+  rebuild();
+});
 
 /* ═══════════════ shareable links & history ═══════════════
    Every parameter change lands in the URL hash (debounced, one history
@@ -2196,7 +2397,7 @@ function syncLidUI() {
    back/forward buttons walk the parameter history. */
 
 const INPUT_IDS = ["len","wid","hgt","dia","wall","bot","rad","clr","lip","skirt","tor","lidT",
-                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty","zr","dvpr","dvhr","dvtr","thr","fbi","fbo"];
+                   "zx","zy","dvpx","dvpy","dvhx","dvhy","dvtx","dvty","zr","dvpr","dvhr","dvtr","thr","fbi","flat"];
 const DEF = {
   unit: "mm", mode: "outer", shape: "rect", lid: "none", hinge: "pip", latch: "flap",
   inputs: Object.fromEntries(INPUT_IDS.map(id => [id, $(id).value])),
@@ -2221,8 +2422,7 @@ for (const id of INPUT_IDS) {
   b.className = "rst";
   b.textContent = "↺";
   b.addEventListener("click", () => { inp.value = defVal(id); rebuild(); });
-  if (field.classList.contains("col")) field.appendChild(b);
-  else (inp.closest(".stepper") || inp).after(b);
+  field.appendChild(b); // after the unit label, never between value and unit
   RST.push([id, b]);
 }
 function refreshResets() {
@@ -2256,9 +2456,6 @@ function scheduleHashUpdate() {
   }, 400);
 }
 
-const setSeg = (segId, attr, value) =>
-  $(segId).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset[attr] === value));
-
 function applyState(qs) {
   const p = new URLSearchParams(qs);
   const get = (k, d) => p.has(k) ? p.get(k) : d;
@@ -2269,17 +2466,16 @@ function applyState(qs) {
   hingeKind = get("h", DEF.hinge);
   latchKind = get("lt", DEF.latch);
   for (const id of INPUT_IDS) $(id).value = p.has(id) ? p.get(id) : defVal(id);
-  setSeg("unitSeg", "unit", unit);
-  setSeg("modeSeg", "mode", mode);
-  setSeg("shapeSeg", "shape", shape);
-  setSeg("lidSeg", "lid", lidType);
-  setSeg("hingeSeg", "hinge", hingeKind);
-  setSeg("latchSeg", "latch", latchKind);
+  $("unitSel").value = unit;
+  setRadio("mode", mode);
+  setRadio("shape", shape);
+  treeFromLidType();
+  $("divOn").checked = dividersTouched();
+  $("divTree").style.display = $("divOn").checked ? "" : "none";
   document.querySelectorAll(".unit").forEach(u => {
     if (u.textContent === "mm" || u.textContent === "in") u.textContent = unit;
   });
   syncShapeUI();
-  syncLidUI();
   rebuild();
 }
 window.addEventListener("popstate", () => {
@@ -2287,30 +2483,19 @@ window.addEventListener("popstate", () => {
   applyState(location.hash.slice(1));
 });
 
-$("lidSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    lidType = btn.dataset.lid;
-    $("lidSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
-    if (lidType === "cap" && val("skirt") < 2) $("skirt").value = 8; // a cap needs its skirt
-    if (lidType === "screw" && val("clr") < 0.25)                    // threads like a freer fit
-      $("clr").value = unit === "in" ? +(0.3 / IN).toFixed(4) : 0.3;
-    syncLidUI();
-    rebuild();
-  });
-});
-$("hingeSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    hingeKind = btn.dataset.hinge;
-    $("hingeSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
-    syncLidUI();
-    rebuild();
-  });
-});
-$("latchSeg").querySelectorAll("button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    latchKind = btn.dataset.latch;
-    $("latchSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
-    rebuild();
+
+// collapsible sections: click or key a heading to fold that group away
+document.querySelectorAll(".group-title").forEach(t => {
+  t.setAttribute("role", "button");
+  t.setAttribute("tabindex", "0");
+  const toggle = () => {
+    const folded = t.closest(".group").classList.toggle("collapsed");
+    t.setAttribute("aria-expanded", String(!folded));
+  };
+  t.setAttribute("aria-expanded", "true");
+  t.addEventListener("click", toggle);
+  t.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
   });
 });
 
@@ -2330,6 +2515,11 @@ applyLang();
 syncShapeUI();
 if (location.hash.length > 1) { fromHistory = true; applyState(location.hash.slice(1)); }
 else rebuild();
+
+// start with the dividers folded away unless this setup actually uses them
+if (!RST.filter(([id]) => id.startsWith("dv") || id.startsWith("z")).some(([id]) => $(id).value !== defVal(id)))
+  $("dvpx").closest(".group").classList.add("collapsed");
+
 requestAnimationFrame(render);
 </script>
 </body>

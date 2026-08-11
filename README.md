@@ -23,10 +23,12 @@ JavaScript.
   flat without supports.
 - **Dimensions** — outer or inner (walls and floor are added automatically in
   inner mode), wall/floor thickness.
-- **Bottom fillets** — separate inner and outer radii: a concave strength
-  cove where the floor meets the walls inside, and a convex round on the
-  outer base edge. Both follow the outline (rectangles and cylinders alike)
-  and apply to every box variant, including hinged, sliding, and screw.
+- **Bottom fillet** — a concave strength cove where the floor meets the
+  walls. The outer base edge round follows from it automatically (capped by
+  the wall thickness); a separate *flattening* parameter lifts that round off
+  the bed when the box needs a straight bearing band to stand on. Both follow
+  the outline (rectangles and cylinders alike) and apply to every box
+  variant, including hinged, sliding, and screw.
 - **Dividers** — split the cavity into zones along both axes: an equal split
   by zone count, or explicit divider positions in length units or % of the
   inner span (e.g. `40, 66%`). Crosswise and lengthwise dividers take
@@ -72,6 +74,12 @@ JavaScript.
 - **Binary STL export** — millimeter units, watertight meshes; composite parts
   are unions of closed shells, which every mainstream slicer (PrusaSlicer,
   Orca, Cura) merges natively.
+
+The panel asks its questions in dependency order — shape, then dimensions,
+walls, lid, dividers — with checkboxes opening the optional sections and
+nested radio groups showing what belongs to what. Sections fold away, and a
+folded heading still names its current choice. Derived values (like the base
+edge round) are stated rather than offered as knobs.
 
 ## Usage
 
