@@ -10,7 +10,7 @@ JavaScript.
 ## Features
 
 - **Two shapes** — rectangular (with corner radius, 0 = sharp) or cylindrical
-  (by diameter). Cylinders reuse the whole machinery: inset and cap lids grip
+  (by diameter). Cylinders reuse the whole machinery: friction lids grip
   with four radial friction bumps, dividers become chords that stay inside
   the round wall, and wall smoothness adapts to the radius (up to a 96-gon).
   Hinged and sliding lids need straight walls and are disabled for cylinders.
@@ -32,8 +32,8 @@ JavaScript.
 - **Dividers** — split the cavity into zones along both axes: an equal split
   by zone count, or explicit divider positions in length units or % of the
   inner span (e.g. `40, 66%`). Crosswise and lengthwise dividers take
-  separate heights (0 = full height, capped per lid type: below the inset
-  lip, below the sliding slot, and so on) and separate thicknesses. The data
+  separate heights (0 = full height, capped per lid type: below the lid's
+  inner lip, below the sliding slot, and so on) and separate thicknesses. The data
   sheet lists the clear size of every resulting zone.
 - **Metric or imperial** — work in millimeters or inches (capacity in ml or
   fl oz, plastic in cm³/g or in³/oz); the geometry and the exported STL are
@@ -47,13 +47,13 @@ JavaScript.
 - **Six languages** — English, French, German, Spanish, Chinese, and Russian,
   including warnings and the data sheet, with locale-aware number formatting.
   The choice is remembered; first visits follow the browser language.
-- **Five lid options:**
-  - **None** — an open tray.
-  - **Inset** — a lid with a hollow lip that drops inside the box. Friction
-    ridges on the lip reach 0.15 mm past the nominal clearance, so the lid
-    holds with a light press fit at any clearance setting.
-  - **Cap** — a lid that slides over the outside of the box, with the same
-    friction ridges on the inside of its skirt.
+- **Four lid mechanisms** (plus none — an open tray):
+  - **Friction** — a press-fit lid whose two grips are independent
+    checkboxes: an *inner lip* that drops inside the box, an *outer skirt*
+    that slides over its walls, or both at once — a double-wall lid that
+    straddles the rim. Friction ridges reach 0.15 mm past the nominal
+    clearance, so the lid holds with a light press fit at any clearance
+    setting.
   - **Hinged** — a lid hinged along the top back edge, with a choice of
     hinge mechanism: *in place* (one pre-assembled closed piece, the pin grown
     inside the knuckles with 0.45 mm clearance — the first turn breaks it
@@ -64,9 +64,9 @@ JavaScript.
     lug, a *springy tongue* that clicks over a rib, or none.
   - **Sliding** — a pencil-box lid that slides into side slots from one end,
     held shut by friction bumps, with a grip bar on top.
-- **Lid body & skirt** — inset, cap, and hinged lids accept a body height
-  (raised sides above the seam) and, for inset/cap, a skirt height (an apron
-  hanging over the walls).
+- **Lid body & skirt** — friction and hinged lids accept a body height
+  (raised sides above the seam); the friction lid's lip and skirt depths
+  set how far each grip reaches.
 - **Live 3D preview** — a small software renderer on `<canvas>` (drag to
   rotate, scroll to zoom), with a build-plate grid and an axis triad.
 - **Data sheet** — inner dimensions, capacity in ml, plastic volume and
@@ -89,7 +89,7 @@ deeper than the cavity, a box too short for the hinge, and so on).
 
 ### Printing notes
 
-- Inset, cap, and sliding lids print flat as-is, no supports.
+- Friction and sliding lids print flat as-is, no supports.
 - The *in place* hinged box is exported assembled and closed. Pick your own
   print orientation — e.g. tilted ~45° around the long axis with supports
   where you like them; the working clearances (0.45 mm radial in the hinges,

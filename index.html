@@ -215,6 +215,10 @@
     border-radius: 3px; margin-bottom: 6px;
     background: rgba(255,107,94,.06);
   }
+  #warnings .w.adv { /* advisory: informational, doesn't block the build */
+    color: var(--muted); border-color: rgba(150,150,150,.3);
+    border-left-color: var(--muted); background: rgba(150,150,150,.05);
+  }
 
   /* part data sheet */
   .stats { font-family: var(--font-mono); font-size: 12.5px; }
@@ -396,8 +400,8 @@
 
         <div class="sub" id="fitTree">
           <div class="radios" id="fitSeg">
-            <label><input type="radio" name="fit" value="inset" checked><span data-i18n="fit_inset">Grips the inner walls</span></label>
-            <label><input type="radio" name="fit" value="cap"><span data-i18n="fit_cap">Grips the outer walls</span></label>
+            <label><input type="checkbox" id="gripIn" checked><span data-i18n="fit_inset">Grips the inner walls</span></label>
+            <label><input type="checkbox" id="gripOut"><span data-i18n="fit_cap">Grips the outer walls</span></label>
           </div>
         </div>
 
@@ -643,14 +647,22 @@ function buildBox(L, W, H, wall, bottom, R, fo = 0, flat = 0) {
 // tor — body height above the seam; skirt — apron hanging outside the box
 // below the seam; lipH — inner lip below the seam (inset fit). Any may be 0.
 // Skirted lids use an enlarged outline so the box rim tucks inside.
+let gripEmitted = { lip: false, skirt: false }; // did the last build get friction features?
 function buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
   const T = [];
+  gripEmitted = { lip: false, skirt: false };
   const off = skirt > 0 ? wall + clr : 0;
   const Lo = L + 2*off, Wo = W + 2*off, Ro = R + off;
+  const both = lipH > 0 && skirt > 0;
   T.push(...plate(Lo, Wo, Ro, lidT));                       // roof
   const bodyH = tor + skirt;
   if (bodyH > 0.05)                                         // torso + skirt band, sunk into the roof
     T.push(...wallBand(Lo, Wo, Ro, wall, lidT - 0.4, lidT + bodyH));
+  if (skirt > 0 && tor > 0.05)
+    // rim seat: with a skirt the body band moves outboard, so close the
+    // channel at the seam or the lid would sink the full body height
+    T.push(...wallBand(L + 2*clr + 0.3, W + 2*clr + 0.3, R + clr + 0.15,
+                       wall + 2*clr + 0.3, lidT - 0.4, lidT + tor));
   if (lipH > 0) {                                           // inner lip
     const i1 = wall + clr, i2 = i1 + wall;
     const zTip = lidT + tor + lipH;
@@ -663,21 +675,25 @@ function buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
         .map(t => t.map(p => [p[0], p[1], p[2] + lidT - 0.4])));
     }
     // friction ridges on the lip's long sides: they reach 0.15 mm past the
-    // nominal clearance and hold the lid with a light press fit
+    // nominal clearance and hold the lid with a light press fit; with both
+    // grips they move to the lip tip so the two sides never pinch one spot
     const ry = W/2 - i1, rr = clr + 0.3;
     const xr = L/2 - i1 - Math.max(R - i1, 0) - 0.5;
     if (xr > 2 && lipH > 2*rr + 0.8) {
-      const zc = lidT + tor + lipH/2;
+      const zc = lidT + tor + (both ? Math.max(lipH - rr - 0.6, lipH/2) : lipH/2);
       T.push(...halfRoundRidgeX(-xr, xr, ry - 0.15, zc, rr, 1));
       T.push(...halfRoundRidgeX(-xr, xr, -(ry - 0.15), zc, rr, -1));
+      gripEmitted.lip = true;
     }
   }
-  if (skirt > 0) {                                          // skirt grip ridges
+  if (skirt > 0) {                                          // skirt grip ridges (near the seam)
     const rr = clr + 0.3, xr = L/2 - R - 1;
     if (xr > 2 && skirt > 2*rr + 0.8) {
-      const ry = W/2 + clr, zc = lidT + tor + skirt/2;
+      const ry = W/2 + clr;
+      const zc = lidT + tor + (both ? Math.min(rr + 0.6, skirt/2) : skirt/2);
       T.push(...halfRoundRidgeX(-xr, xr, ry + 0.15, zc, rr, -1));
       T.push(...halfRoundRidgeX(-xr, xr, -(ry + 0.15), zc, rr, 1));
+      gripEmitted.skirt = true;
     }
   }
   // circular lids have no straight runs — grip with four radial bumps
@@ -692,11 +708,22 @@ function buildLidShell(L, W, wall, R, clr, lipH, lidT, tor, skirt) {
     ];
     if (lipH > 2.2) {
       const rl = L/2 - wall - clr; // lip outer face radius
-      T.push(...bumps(rl - 0.5, rl + clr + 0.15, lidT + tor + lipH/2, Math.min(2, lipH/2 - 0.3)));
+      // the flat chord corners sit farther out than its middle — size the
+      // face so the corners (the first contact) press 0.15, not 0.3-0.6
+      const rOut = Math.sqrt((L/2 - wall + 0.15)**2 - 9);
+      const zh = Math.min(both ? 1.2 : 2, lipH/2 - 0.3);
+      const zc = lidT + tor + (both ? Math.max(lipH - zh - 0.3, lipH/2) : lipH/2);
+      T.push(...bumps(rl - 0.5, rOut, zc, zh));
+      gripEmitted.lip = true;
     }
     if (skirt > 2.2) {
       const rs = L/2 + clr;        // skirt inner face radius
-      T.push(...bumps(L/2 - 0.15, rs + 0.5, lidT + tor + skirt/2, Math.min(2, skirt/2 - 0.3)));
+      const zh = Math.min(both ? 1.2 : 2, skirt/2 - 0.3);
+      const zc = lidT + tor + (both ? Math.min(zh + 0.3, skirt/2) : skirt/2);
+      // bury the bump in the skirt, but keep its flat corners inside the OD
+      const rOut = Math.min(rs + 0.5, Math.sqrt((rs + wall)**2 - 9));
+      T.push(...bumps(L/2 - 0.15, rOut, zc, zh));
+      gripEmitted.skirt = true;
     }
   }
   return T;
@@ -820,11 +847,6 @@ function arcWallZ(cx, cy, ro, ri, a0, a1, z0, z1, segs) {
   quad(P(ri,0,z0), P(ro,0,z0), P(ro,0,z1), P(ri,0,z1));             // end face at a0
   quad(P(ro,segs,z0), P(ri,segs,z0), P(ri,segs,z1), P(ro,segs,z1)); // end face at a1
   return T;
-}
-
-/* ── cap lid: shell with a skirt worn over the box from above ── */
-function buildLidCap(L, W, wall, R, clr, skirt, lidT, tor) {
-  return buildLidShell(L, W, wall, R, clr, 0, lidT, tor, skirt);
 }
 
 // Closed sweep of a 2D profile (d = inward offset, z) along the
@@ -1289,7 +1311,7 @@ const $ = id => document.getElementById(id);
 let mode = "outer";
 let shape = "rect";      // rect | cyl
 let unit = "mm";         // mm | in — display only; geometry and STL stay in mm
-let lidType = "none";    // none | inset | cap | hinge | slide
+let lidType = "none";    // none | friction | hinge | slide | screw
 let hingeKind = "pip";   // pip | pin | snap
 let latchKind = "flap";  // flap | tongue | none
 let model = null;        // { boxTris, lidTris, L, W, H, raw, ok }
@@ -1321,7 +1343,7 @@ en: {
   ret_friction: "Friction fit", ret_hinge: "Hinge and latch", ret_screw: "Screw thread",
   fit_inset: "Grips the inner walls <small>lid drops in</small>",
   fit_cap: "Grips the outer walls <small>lid goes over</small>",
-  w_cyllid: "This lid type isn't available for cylindrical boxes — use inset or cap.",
+  w_cyllid: "This lid type isn't available for cylindrical boxes — use a friction lid.",
   segRadial: "Radial — split into sectors", f_sect: "Sectors <small>equal split</small>",
   f_dvpr: "Angles <small>degrees or % of the turn; overrides sectors</small>",
   ph_r: "e.g. 0, 120, 240", s_sect: "sectors",
@@ -1332,6 +1354,12 @@ en: {
   w_thrh: "Thread height must be at least 6 mm and leave 2 mm of wall below.",
   w_thrdia: "The screw lid needs a diameter of 24 mm or more.",
   resetTip: "Reset to default",
+  fit_both: "Grips both walls",
+  w_nogrip: "Neither grip is ticked — the lid will just rest on the rim.",
+  w_pinch: "Gripping both sides of a wall thinner than 0.6 mm would pinch it shut — thicken the wall or untick one grip.",
+  a_nofricIn: "No room for friction ridges on the inner lip at this size — the inner grip will be loose.",
+  a_nofricOut: "No room for friction ridges on the outer skirt at this size — the outer grip will be loose.",
+  clr_both: "per side; the rim channel is wall + 2 × clearance wide",
   f_fbi: "Bottom fillet <small>strength cove where the floor meets the walls</small>",
   f_flat: "Bottom flattening <small>straight bearing band under the round</small>",
   autoRound: "Outer base edge is rounded {0} to match the fillet (capped by the {1} wall). Flattening lifts that round off the bed so the box stands on a straight band.",
@@ -1397,7 +1425,7 @@ fr: {
   ret_friction: "Par friction", ret_hinge: "Charnière et fermoir", ret_screw: "Filetage",
   fit_inset: "Serre les parois intérieures <small>le couvercle s'emboîte</small>",
   fit_cap: "Serre les parois extérieures <small>le couvercle coiffe</small>",
-  w_cyllid: "Ce type de couvercle n'existe pas pour les boîtes cylindriques — utilisez encastré ou capuchon.",
+  w_cyllid: "Ce type de couvercle n'existe pas pour les boîtes cylindriques — utilisez un couvercle à friction.",
   segRadial: "Radiaux — secteurs", f_sect: "Secteurs <small>partage égal</small>",
   f_dvpr: "Angles <small>degrés ou % du tour ; prioritaire sur les secteurs</small>",
   ph_r: "ex. 0, 120, 240", s_sect: "secteurs",
@@ -1408,6 +1436,12 @@ fr: {
   w_thrh: "La hauteur du filetage doit faire au moins 6 mm et laisser 2 mm de paroi en dessous.",
   w_thrdia: "Le couvercle vissé exige un diamètre d'au moins 24 mm.",
   resetTip: "Rétablir la valeur par défaut",
+  fit_both: "Serre les deux parois",
+  w_nogrip: "Aucune prise cochée — le couvercle reposera simplement sur le bord.",
+  w_pinch: "Serrer les deux côtés d\u2019une paroi de moins de 0,6 mm la pincerait — épaississez la paroi ou décochez une prise.",
+  a_nofricIn: "Pas de place pour les stries de friction sur la lèvre intérieure à cette taille — la prise intérieure sera lâche.",
+  a_nofricOut: "Pas de place pour les stries de friction sur la jupe extérieure à cette taille — la prise extérieure sera lâche.",
+  clr_both: "par côté ; le canal du bord fait paroi + 2 × jeu de large",
   f_fbi: "Congé du fond <small>renfort à la jonction du fond et des parois</small>",
   f_flat: "Aplatissement du fond <small>bande d'appui droite sous l'arrondi</small>",
   autoRound: "L'arête extérieure de la base est arrondie de {0}, d'après le congé (limité par la paroi de {1}). L'aplatissement soulève cet arrondi pour que la boîte repose sur une bande droite.",
@@ -1473,7 +1507,7 @@ de: {
   ret_friction: "Klemmsitz", ret_hinge: "Scharnier und Verschluss", ret_screw: "Gewinde",
   fit_inset: "Greift die Innenwände <small>Deckel fällt hinein</small>",
   fit_cap: "Greift die Außenwände <small>Deckel stülpt über</small>",
-  w_cyllid: "Dieser Deckeltyp ist für zylindrische Boxen nicht verfügbar — Einlege- oder Stülpdeckel wählen.",
+  w_cyllid: "Dieser Deckeltyp ist für zylindrische Boxen nicht verfügbar — einen Friktionsdeckel wählen.",
   segRadial: "Radial — Sektoren", f_sect: "Sektoren <small>gleichmäßig</small>",
   f_dvpr: "Winkel <small>Grad oder % der Umdrehung; überschreibt Sektoren</small>",
   ph_r: "z. B. 0, 120, 240", s_sect: "Sektoren",
@@ -1484,6 +1518,12 @@ de: {
   w_thrh: "Die Gewindehöhe muss mindestens 6 mm betragen und 2 mm Wand darunter lassen.",
   w_thrdia: "Der Schraubdeckel braucht mindestens 24 mm Durchmesser.",
   resetTip: "Auf Standard zurücksetzen",
+  fit_both: "Greift beide Wände",
+  w_nogrip: "Kein Griff gewählt — der Deckel liegt nur lose auf dem Rand.",
+  w_pinch: "Eine Wand unter 0,6 mm von beiden Seiten zu greifen würde sie zuquetschen — Wand verdicken oder einen Griff abwählen.",
+  a_nofricIn: "Kein Platz für Friktionsrippen an der Innenlippe bei dieser Größe — der innere Griff sitzt locker.",
+  a_nofricOut: "Kein Platz für Friktionsrippen an der Außenschürze bei dieser Größe — der äußere Griff sitzt locker.",
+  clr_both: "pro Seite; der Randkanal ist Wand + 2 × Spiel breit",
   f_fbi: "Bodenkehle <small>Verstärkung am Übergang Boden–Wand</small>",
   f_flat: "Bodenabflachung <small>gerades Aufstandsband unter der Rundung</small>",
   autoRound: "Die äußere Bodenkante wird mit {0} gerundet, passend zur Kehle (begrenzt durch die {1} Wand). Die Abflachung hebt diese Rundung an, sodass die Box auf einem geraden Band steht.",
@@ -1549,7 +1589,7 @@ es: {
   ret_friction: "Ajuste por fricción", ret_hinge: "Bisagra y cierre", ret_screw: "Rosca",
   fit_inset: "Agarra las paredes interiores <small>la tapa encaja dentro</small>",
   fit_cap: "Agarra las paredes exteriores <small>la tapa cubre por fuera</small>",
-  w_cyllid: "Este tipo de tapa no está disponible para cajas cilíndricas — usa encajada o exterior.",
+  w_cyllid: "Este tipo de tapa no está disponible para cajas cilíndricas — usa una tapa de fricción.",
   segRadial: "Radiales — sectores", f_sect: "Sectores <small>partes iguales</small>",
   f_dvpr: "Ángulos <small>grados o % de la vuelta; anula los sectores</small>",
   ph_r: "p. ej. 0, 120, 240", s_sect: "sectores",
@@ -1560,6 +1600,12 @@ es: {
   w_thrh: "La altura de la rosca debe ser de al menos 6 mm y dejar 2 mm de pared debajo.",
   w_thrdia: "La tapa roscada necesita un diámetro de al menos 24 mm.",
   resetTip: "Restablecer el valor predeterminado",
+  fit_both: "Agarra ambas paredes",
+  w_nogrip: "No hay ningún agarre marcado: la tapa solo se apoyará en el borde.",
+  w_pinch: "Agarrar ambos lados de una pared de menos de 0,6 mm la aplastaría: engrosa la pared o desmarca un agarre.",
+  a_nofricIn: "No hay sitio para las crestas de fricción en el labio interior a este tamaño: el agarre interior quedará flojo.",
+  a_nofricOut: "No hay sitio para las crestas de fricción en la falda exterior a este tamaño: el agarre exterior quedará flojo.",
+  clr_both: "por lado; el canal del borde mide pared + 2 × holgura",
   f_fbi: "Redondeo del fondo <small>refuerzo en la unión del fondo y las paredes</small>",
   f_flat: "Aplanado del fondo <small>banda recta de apoyo bajo el redondeo</small>",
   autoRound: "El borde exterior de la base se redondea {0}, siguiendo el redondeo interior (limitado por la pared de {1}). El aplanado eleva ese redondeo para que la caja apoye sobre una banda recta.",
@@ -1625,7 +1671,7 @@ zh: {
   ret_friction: "摩擦配合", ret_hinge: "铰链加锁扣", ret_screw: "螺纹",
   fit_inset: "卡住内壁 <small>盖子嵌入</small>",
   fit_cap: "卡住外壁 <small>盖子扣在外面</small>",
-  w_cyllid: "圆柱形盒子不支持此盖型——请选内嵌盖或套盖。",
+  w_cyllid: "圆柱形盒子不支持此盖型——请选摩擦盖。",
   segRadial: "径向 — 扇区分割", f_sect: "扇区 <small>均分</small>",
   f_dvpr: "角度 <small>度数或整圈的 %；优先于扇区</small>",
   ph_r: "例：0, 120, 240", s_sect: "扇区",
@@ -1636,6 +1682,12 @@ zh: {
   w_thrh: "螺纹高度至少 6 mm，且下方需留 2 mm 壁高。",
   w_thrdia: "螺纹盖需要直径不小于 24 mm。",
   resetTip: "恢复默认值",
+  fit_both: "内外壁同时卡住",
+  w_nogrip: "未勾选任何卡合方式——盖子只会搁在边沿上。",
+  w_pinch: "从两侧夹住薄于 0.6 mm 的壁会把它夹死——请加厚壁或取消一侧卡合。",
+  a_nofricIn: "此尺寸下内唇没有空间放摩擦凸条——内侧卡合会松动。",
+  a_nofricOut: "此尺寸下外裙没有空间放摩擦凸条——外侧卡合会松动。",
+  clr_both: "每侧；边沿凹槽宽度为壁厚 + 2 × 间隙",
   f_fbi: "底部圆角 <small>底与壁交界处的加强圆角</small>",
   f_flat: "底部找平 <small>圆角下方的平直支承带</small>",
   autoRound: "底座外缘按内圆角自动倒圆 {0}（受 {1} 壁厚限制）。找平会把该圆角抬离底面，使盒子落在一圈平直带上。",
@@ -1701,7 +1753,7 @@ ru: {
   ret_friction: "Трением", ret_hinge: "Петля и замок", ret_screw: "Резьбой",
   fit_inset: "Держится за внутренние стенки <small>вкладывается внутрь</small>",
   fit_cap: "Держится за наружные стенки <small>надевается сверху</small>",
-  w_cyllid: "Этот тип крышки недоступен для цилиндра — выберите вкладную или колпачок.",
+  w_cyllid: "Этот тип крышки недоступен для цилиндра — используйте фрикционную крышку.",
   segRadial: "Радиальные — деление на секторы", f_sect: "Секторы <small>поровну</small>",
   f_dvpr: "Углы <small>в градусах или % оборота; важнее секторов</small>",
   ph_r: "напр. 0, 120, 240", s_sect: "секторы",
@@ -1712,6 +1764,12 @@ ru: {
   w_thrh: "Высота резьбы — от 6 мм, и под ней должно оставаться 2 мм стенки.",
   w_thrdia: "Резьбовой крышке нужен диаметр от 24 мм.",
   resetTip: "Вернуть значение по умолчанию",
+  fit_both: "Держится за обе стенки",
+  w_nogrip: "Ни одна хватка не выбрана — крышка будет просто лежать на кромке.",
+  w_pinch: "Хватка с обеих сторон стенки тоньше 0,6 мм пережмёт её — утолстите стенку или снимите одну галочку.",
+  a_nofricIn: "На внутреннем бортике не хватает места для фрикционных гребней — внутренняя хватка будет слабой.",
+  a_nofricOut: "На наружной юбке не хватает места для фрикционных гребней — наружная хватка будет слабой.",
+  clr_both: "с каждой стороны; канал под кромку = стенка + 2 × зазор",
   f_fbi: "Галтель дна <small>усиление стыка дна и стенок</small>",
   f_flat: "Выпрямление дна <small>прямой опорный поясок под скруглением</small>",
   autoRound: "Наружная кромка основания скругляется на {0} — по галтели (не больше стенки {1}). Выпрямление поднимает это скругление над столом, и коробка встаёт на прямой поясок.",
@@ -1853,15 +1911,22 @@ function rebuild() {
     ? parseAngles($("dvpr").value, Math.max(1, Math.round(raw.zr)))
     : { ang: [], bad: false, custom: false };
 
-  const warnings = [];
+  const warnings = []; // fatal — block the build
+  const advice = [];   // informational — the model still builds
   if (L - 2*raw.wall < 1 || W - 2*raw.wall < 1) warnings.push(T("w_walls"));
   if (H - raw.bottom < 1) warnings.push(T("w_floor"));
-  if (lidType === "inset" && (L/2 - raw.wall - raw.clr < 0.5 || W/2 - raw.wall - raw.clr < 0.5))
-    warnings.push(T("w_clr"));
-  if (lidType === "inset" && raw.lip > H - raw.bottom) warnings.push(T("w_lip"));
-  if (lidType === "cap") {
-    if (raw.skirt < 2) warnings.push(T("w_capmin"));
-    if (raw.skirt > H - 1) warnings.push(T("w_capmax"));
+  if (lidType === "friction") {
+    if (gripIn()) {
+      if (L/2 - raw.wall - raw.clr < 0.5 || W/2 - raw.wall - raw.clr < 0.5) warnings.push(T("w_clr"));
+      if (raw.lip > H - raw.bottom) warnings.push(T("w_lip"));
+    }
+    if (gripOut()) {
+      if (raw.skirt < 2) warnings.push(T("w_capmin"));
+      if (raw.skirt > H - 1) warnings.push(T("w_capmax"));
+    }
+    // gripping a thin wall from both sides pinches it shut
+    if (gripIn() && gripOut() && raw.wall < 0.6) warnings.push(T("w_pinch"));
+    if (!gripIn() && !gripOut()) advice.push(T("w_nogrip"));
   }
   if (shape === "cyl" && (lidType === "hinge" || lidType === "slide"))
     warnings.push(T("w_cyllid"));
@@ -1923,10 +1988,19 @@ function rebuild() {
       base = buildScrewBox(L, H, raw.wall, raw.bottom, raw.thr, fo, raw.flat);
       lidTris = clean(buildScrewLid(L, raw.wall, raw.clr, raw.thr, raw.lidT));
     } else {
-      if (lidType === "inset") divTop = H - raw.lip - 0.3;
+      // each grip contributes its own feature; both together give a lid
+      // that straddles the rim in the channel between lip and skirt
+      const lip = lidType === "friction" && gripIn() ? raw.lip : 0;
+      const skirt = lidType === "friction" && gripOut() ? raw.skirt : 0;
+      if (lip > 0) divTop = H - lip - 0.3;
       base = buildBox(L, W, H, raw.wall, raw.bottom, R, fo, raw.flat);
-      if (lidType === "inset") lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, raw.lip, raw.lidT, raw.tor, raw.skirt));
-      if (lidType === "cap")   lidTris = clean(buildLidCap(L, W, raw.wall, R, raw.clr, raw.skirt, raw.lidT, raw.tor));
+      if (lidType === "friction") {
+        lidTris = clean(buildLid(L, W, raw.wall, R, raw.clr, lip, raw.lidT, raw.tor, skirt));
+        // the ridge/bump builders skip geometries with no room for them —
+        // say so instead of shipping a lid that only looks like it grips
+        if (lip > 0 && !gripEmitted.lip) advice.push(T("a_nofricIn"));
+        if (skirt > 0 && !gripEmitted.skirt) advice.push(T("a_nofricOut"));
+      }
     }
     if (px.pos.length || py.pos.length) {
       const topX = raw.dvhx > 0 ? Math.min(raw.bottom + raw.dvhx, divTop) : divTop;
@@ -1945,10 +2019,11 @@ function rebuild() {
   }
   model = { boxTris, lidTris, L, W, H, raw, ok };
 
-  // warnings
+  // warnings block the build; advice just informs
   const wEl = $("warnings");
-  wEl.innerHTML = warnings.map(w => `<div class="w">${w}</div>`).join("");
-  wEl.classList.toggle("show", warnings.length > 0);
+  wEl.innerHTML = warnings.map(w => `<div class="w">${w}</div>`).join("")
+                + advice.map(a => `<div class="w adv">${a}</div>`).join("");
+  wEl.classList.toggle("show", warnings.length + advice.length > 0);
 
   // data sheet
   const fmt = (x, d = 1) => x.toLocaleString(T("locale"), { maximumFractionDigits: d });
@@ -1973,7 +2048,9 @@ function rebuild() {
     : lidType === "slide" ? plain("kind_slide")
     : lidType === "hinge" ? plain("ret_hinge")
     : lidType === "screw" ? plain("ret_screw")
-    : plain(lidType === "cap" ? "fit_cap" : "fit_inset"));
+    : gripIn() && gripOut() ? T("fit_both")
+    : gripOut() ? plain("fit_cap")
+    : gripIn() ? plain("fit_inset") : T("ret_friction"));
   setSummary($("divOn"), divOn
     ? `${px.pos.length + 1} × ${py.pos.length + 1}${pr.ang.length >= 2 ? ` · ${pr.ang.length}` : ""}`
     : "—");
@@ -2018,7 +2095,8 @@ function rebuild() {
     }
     if (lidTris.length) {
       const volLid = meshVolume(lidTris) / 1000;
-      rows.push([lidType === "cap" ? T("s_pcap") : T("s_plid"), plastic(volLid)]);
+      const capOnly = lidType === "friction" && gripOut() && !gripIn();
+      rows.push([capOnly ? T("s_pcap") : T("s_plid"), plastic(volLid)]);
     }
     if (lidType === "hinge" && hingeKind === "pin") {
       const g = hingeLayout(L, W, H, R, raw.lidT, raw.tor, "pin");
@@ -2063,7 +2141,9 @@ $("dlBox").addEventListener("click", () => {
 });
 $("dlLid").addEventListener("click", () => {
   if (!model?.ok || !model.lidTris.length) return;
-  const name = { inset: "lid", cap: "cap", slide: "lid_slide", hinge: "lid_hinged", screw: "lid_screw" }[lidType];
+  const name = lidType === "friction"
+    ? (gripOut() && !gripIn() ? "cap" : "lid")
+    : { slide: "lid_slide", hinge: "lid_hinged", screw: "lid_screw" }[lidType];
   download(toSTL(model.lidTris, name), `${name}_${dimTag()}.stl`);
 });
 
@@ -2293,7 +2373,7 @@ $("shapeSeg").addEventListener("change", () => {
   // a lid the new shape can't build falls back to the friction fit
   const na = shape === "cyl" ? (lidType === "hinge" || lidType === "slide")
                              : lidType === "screw";
-  if (na) { lidType = "inset"; treeFromLidType(); }
+  if (na) { lidType = "friction"; treeFromLidType(); }
   syncShapeUI();
   rebuild();
 });
@@ -2303,14 +2383,15 @@ $("shapeSeg").addEventListener("change", () => {
    it lift off or slide, what holds it shut, which face does it grip — and
    the answers fold into the single lidType the builders take. */
 const LID_FIELDS = {
-  none:  [],
-  inset: ["fClr", "fLip", "fTor", "fSkirt", "fLidT"],
-  cap:   ["fClr", "fTor", "fSkirt", "fLidT"],
-  hinge: ["fTor", "fLidT", "hingeNote"],
-  slide: ["fClr", "fLidT", "slideNote"],
-  screw: ["fClr", "fThr", "fLidT", "screwNote"],
+  none:     [],
+  friction: ["fClr", "fTor", "fLidT"], // fLip / fSkirt follow the two grips
+  hinge:    ["fTor", "fLidT", "hingeNote"],
+  slide:    ["fClr", "fLidT", "slideNote"],
+  screw:    ["fClr", "fThr", "fLidT", "screwNote"],
 };
-const ALL_LID_IDS = [...new Set(Object.values(LID_FIELDS).flat())];
+const ALL_LID_IDS = [...new Set([...Object.values(LID_FIELDS).flat(), "fLip", "fSkirt"])];
+const gripIn = () => $("gripIn").checked;
+const gripOut = () => $("gripOut").checked;
 
 const radioVal = name => document.querySelector(`input[name="${name}"]:checked`)?.value;
 const setRadio = (name, v) => {
@@ -2328,14 +2409,13 @@ function lidTypeFromTree() { // answers → lidType
   const ret = radioVal("ret");
   if (ret === "hinge") return "hinge";
   if (ret === "screw") return "screw";
-  return radioVal("fit") === "cap" ? "cap" : "inset";
+  return "friction";
 }
 
 function treeFromLidType() { // lidType → answers (hash links, history)
   $("lidOn").checked = lidType !== "none";
   setRadio("kind", lidType === "slide" ? "slide" : "lift");
   setRadio("ret", lidType === "hinge" ? "hinge" : lidType === "screw" ? "screw" : "friction");
-  if (lidType === "cap" || lidType === "inset") setRadio("fit", lidType);
   setRadio("hinge", hingeKind);
   setRadio("latch", latchKind);
 }
@@ -2350,20 +2430,28 @@ function syncLidUI() {
   const on = lidType !== "none";
   $("lidTree").style.display = on ? "" : "none";
   $("liftTree").style.display = lidType === "slide" ? "none" : "";
-  $("fitTree").style.display = lidType === "cap" || lidType === "inset" ? "" : "none";
+  $("fitTree").style.display = lidType === "friction" ? "" : "none";
   $("hingeOpts").style.display = lidType === "hinge" ? "" : "none";
   $("segLidParams").style.display = on ? "" : "none";
 
   for (const id of ALL_LID_IDS) $(id).style.display = "none";
   for (const id of LID_FIELDS[lidType]) $(id).style.display = "";
+  if (lidType === "friction") { // each grip brings its own depth field
+    if (gripIn()) $("fLip").style.display = "";
+    if (gripOut()) $("fSkirt").style.display = "";
+  }
 
-  // one label, four different gaps — name the one in play
+  // one label, several different gaps — name the one in play
   const small = $("fClr").querySelector("small");
-  if (small && I18N.en["clr_" + lidType]) small.textContent = T("clr_" + lidType);
+  const clrKey = lidType === "friction"
+    ? (gripIn() && gripOut() ? "clr_both" : gripOut() ? "clr_cap" : "clr_inset")
+    : "clr_" + lidType;
+  if (small) small.textContent = I18N.en[clrKey] ? T(clrKey) : "";
 
   const single = lidType === "none" || (lidType === "hinge" && hingeKind === "pip");
   $("dlLid").style.display = single ? "none" : "";
-  $("dlLid").querySelector("span").textContent = lidType === "cap" ? T("dl_cap") : T("dl_lid");
+  $("dlLid").querySelector("span").textContent =
+    lidType === "friction" && gripOut() && !gripIn() ? T("dl_cap") : T("dl_lid");
   $("dlBox").querySelector("span").textContent =
     lidType === "hinge" && hingeKind === "pip" ? T("dl_both") : T("dl_box");
 }
@@ -2372,8 +2460,10 @@ function onLidTreeChange() {
   lidType = lidTypeFromTree();
   hingeKind = radioVal("hinge") || hingeKind;
   latchKind = radioVal("latch") || latchKind;
-  if (lidType === "cap" && val("skirt") < 2) $("skirt").value = 8; // a cap needs its skirt
-  if (lidType === "screw" && val("clr") < 0.25)                    // threads like a freer fit
+  // a freshly ticked outer grip needs a skirt worth gripping with
+  if (lidType === "friction" && gripOut() && val("skirt") < 2)
+    $("skirt").value = unit === "in" ? +(8 / IN).toFixed(4) : 8;
+  if (lidType === "screw" && val("clr") < 0.25) // threads like a freer fit
     $("clr").value = unit === "in" ? +(0.3 / IN).toFixed(4) : 0.3;
   syncLidUI();
   rebuild();
@@ -2440,6 +2530,10 @@ function stateQS() { // only values that differ from the defaults
     if (hingeKind !== DEF.hinge) p.set("h", hingeKind);
     if (latchKind !== DEF.latch) p.set("lt", latchKind);
   }
+  if (lidType === "friction") { // the two grips are independent
+    if (!gripIn()) p.set("gi", "0");
+    if (gripOut()) p.set("go", "1");
+  }
   for (const id of INPUT_IDS) if ($(id).value !== defVal(id)) p.set(id, $(id).value);
   return p.toString();
 }
@@ -2465,6 +2559,16 @@ function applyState(qs) {
   lidType = get("lid", DEF.lid);
   hingeKind = get("h", DEF.hinge);
   latchKind = get("lt", DEF.latch);
+  // links minted before the grips split still name a single fit
+  let gi = get("gi", "1") !== "0", go = get("go", "0") === "1";
+  if (lidType === "inset") { // the old inset lid honored a nonzero skirt too
+    lidType = "friction"; gi = true;
+    go = p.has("go") ? go : parseFloat(p.get("skirt") ?? "0") > 0;
+  }
+  else if (lidType === "cap") { lidType = "friction"; gi = p.has("gi") ? gi : false; go = true; }
+  if (!(lidType in LID_FIELDS)) lidType = DEF.lid; // hand-edited links carry anything
+  $("gripIn").checked = gi;
+  $("gripOut").checked = go;
   for (const id of INPUT_IDS) $(id).value = p.has(id) ? p.get(id) : defVal(id);
   $("unitSel").value = unit;
   setRadio("mode", mode);
