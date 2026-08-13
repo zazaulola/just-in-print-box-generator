@@ -35,6 +35,12 @@ JavaScript.
   separate heights (0 = full height, capped per lid type: below the lid's
   inner lip, below the sliding slot, and so on) and separate thicknesses. The data
   sheet lists the clear size of every resulting zone.
+- **Cell merging** — a clickable zone map shows the divider grid from above:
+  click any wall segment to remove it and merge the two cells it separates
+  (click the faint mark to split them again). Any shape works — L-regions,
+  long channels, a 2×2 block — and radial spokes merge sectors the same way.
+  Merges live in the shareable link too, and the data sheet counts the
+  resulting regions (e.g. zones 3 × 2 → 4).
 - **Metric or imperial** — work in millimeters or inches (capacity in ml or
   fl oz, plastic in cm³/g or in³/oz); the geometry and the exported STL are
   always in millimeters, as slicers expect.

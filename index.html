@@ -220,6 +220,16 @@
     border-left-color: var(--muted); background: rgba(150,150,150,.05);
   }
 
+  /* zone map: click a divider segment to merge / split cells */
+  #fMap { position: relative; }
+  #divMap { width: 100%; max-height: 170px; display: block; }
+  #divMap .shell { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  #divMap .seg { stroke: var(--text); stroke-width: 2.5; vector-effect: non-scaling-stroke; fill: none; }
+  #divMap .seg.gone { stroke: var(--muted); opacity: .45; }
+  #divMap .hit { stroke: rgba(0,0,0,0); stroke-width: 11; cursor: pointer; fill: none; vector-effect: non-scaling-stroke; }
+  #divMap g:hover .seg, #divMap g:focus-within .seg { stroke: var(--accent); opacity: 1; }
+  #divMap .hit:focus { outline: none; }
+
   /* part data sheet */
   .stats { font-family: var(--font-mono); font-size: 12.5px; }
   .stats .row {
@@ -477,6 +487,11 @@
     <div class="group-title"><span class="num">05</span> Dividers</div>
     <label class="chk"><input type="checkbox" id="divOn"><span data-i18n="divOn">Add dividers</span></label>
     <div class="sub" id="divTree" style="display:none">
+    <div class="field col" id="fMap" style="display:none">
+      <label data-i18n="f_map">Zone map <small>click a wall to merge the two cells; click the faint mark to split them again</small></label>
+      <svg id="divMap"></svg>
+      <button class="rst" id="mgReset">↺</button>
+    </div>
     <div class="seg-label" data-i18n="segCross">Crosswise — split the length</div>
     <div class="field">
       <label>Zones <small>equal split</small></label>
@@ -946,23 +961,93 @@ function buildScrewLid(D, wall, clr, thrH, lidT) {
 
 /* ── dividers: split the cavity into zones ──
    xs — crosswise divider centerlines (absolute x), topX — their top;
-   ys — lengthwise divider centerlines (absolute y), topY — their top. */
-function buildDividers(L, W, wall, bottom, xs, topX, dtX, ys, topY, dtY, cylRi) {
+   ys — lengthwise divider centerlines (absolute y), topY — their top.
+   Each divider is built as segments between its crossings. A segment whose
+   key ("x<div>.<row>" / "y<div>.<col>") is in `gaps` is skipped, merging
+   the two cells it would part. */
+
+// Segment plan of one divider family: for the divider at pos[k], the
+// nominal span of each segment between its crossings, clamped to the
+// divider's physical reach (in a cylinder, its chord across the circle
+// plus a weld bite that stays inside the outer wall). Segments shorter
+// than 0.5 mm don't exist. The mesh builder, the zone map, and the region
+// count all consult this one plan, so what is built is what is shown.
+function divPlan(pos, dt, crossPos, straight, cylRi, wall) {
+  const bite = Math.min(wall, 1.2);
+  return pos.map(off => {
+    const h = cylRi
+      ? Math.sqrt(Math.max(cylRi*cylRi - Math.pow(Math.abs(off) + dt/2, 2), 0)) + bite
+      : straight + 0.4;
+    const segs = [];
+    for (let j = 0; j <= crossPos.length; j++) {
+      const a = Math.max(j === 0 ? -h : crossPos[j-1], -h);
+      const b = Math.min(j === crossPos.length ? h : crossPos[j], h);
+      segs.push({ a, b, on: b - a >= 0.5 });
+    }
+    return { h, segs };
+  });
+}
+
+function buildDividers(L, W, wall, bottom, xs, topX, dtX, ys, topY, dtY, cylRi, gaps = new Set()) {
   const T = [];
   const ix = L/2 - wall, iy = W/2 - wall;
-  const bite = Math.min(wall, 1.2);
-  // in a cylinder each divider is a chord: its half-span follows the circle
-  // (plus a weld bite that stays inside the outer wall)
-  const half = (off, dt, straight) => cylRi
-    ? Math.sqrt(Math.max(cylRi*cylRi - Math.pow(Math.abs(off) + dt/2, 2), 0)) + bite
-    : straight + 0.4;
-  for (const x of xs) {
-    const h = half(x, dtX, iy);
-    T.push(...cuboid(x - dtX/2, x + dtX/2, -h, h, bottom - 0.4, topX));
+  const planX = divPlan(xs, dtX, ys, iy, cylRi, wall);
+  const planY = divPlan(ys, dtY, xs, ix, cylRi, wall);
+  const matX = (k, j) => k >= 0 && k < xs.length && j >= 0 && j <= ys.length
+    && planX[k].segs[j].on && !gaps.has(`x${k}.${j}`);
+  const matY = (m, i) => m >= 0 && m < ys.length && i >= 0 && i <= xs.length
+    && planY[m].segs[i].on && !gaps.has(`y${m}.${i}`);
+  // A segment end at a crossing: welds through to the crossing wall's far
+  // face when that wall physically reaches here and has material (a T); a
+  // crossing wall lower than this divider takes a weld tongue only up to
+  // its own top, so nothing overhangs the open cell beyond it; with no
+  // crossing material the end overlaps a hair into a surviving collinear
+  // neighbor, and a free end stops exactly on the grid line.
+  for (let k = 0; k < xs.length; k++) {
+    const x = xs[k], h = planX[k].h;
+    for (let j = 0; j <= ys.length; j++) {
+      if (!matX(k, j)) continue;
+      let { a, b } = planX[k].segs[j];
+      const endAt = (m, dir) => {
+        const reach = Math.abs(x) <= planY[m].h;
+        if (!reach || !(matY(m, k) || matY(m, k + 1)))
+          return matX(k, j + dir) ? dir * 0.2 : 0;
+        if (topX > topY + 0.05 && !matX(k, j + dir)) {
+          const y0 = dir < 0 ? ys[m] - dtY/2 : ys[m];
+          T.push(...cuboid(x - dtX/2, x + dtX/2, y0, y0 + dtY/2, bottom - 0.4, topY));
+          return 0;
+        }
+        return dir * dtY/2;
+      };
+      if (j > 0) a = ys[j-1] + endAt(j - 1, -1);
+      if (j < ys.length) b = ys[j] + endAt(j, 1);
+      a = Math.max(a, -h); b = Math.min(b, h);
+      if (b - a < 0.05) continue;
+      T.push(...cuboid(x - dtX/2, x + dtX/2, a, b, bottom - 0.4, topX));
+    }
   }
-  for (const y of ys) {
-    const h = half(y, dtY, ix);
-    T.push(...cuboid(-h, h, y - dtY/2, y + dtY/2, bottom - 0.4, topY));
+  for (let m = 0; m < ys.length; m++) {
+    const y = ys[m], h = planY[m].h;
+    for (let i = 0; i <= xs.length; i++) {
+      if (!matY(m, i)) continue;
+      let { a, b } = planY[m].segs[i];
+      const endAt = (k, dir) => {
+        const reach = Math.abs(y) <= planX[k].h;
+        if (!reach || !(matX(k, m) || matX(k, m + 1)))
+          return matY(m, i + dir) ? dir * 0.2 : 0;
+        if (topY > topX + 0.05 && !matY(m, i + dir)) {
+          const x0 = dir < 0 ? xs[k] - dtX/2 : xs[k];
+          T.push(...cuboid(x0, x0 + dtX/2, y - dtY/2, y + dtY/2, bottom - 0.4, topX));
+          return 0;
+        }
+        return dir * dtX/2;
+      };
+      if (i > 0) a = xs[i-1] + endAt(i - 1, -1);
+      if (i < xs.length) b = xs[i] + endAt(i, 1);
+      a = Math.max(a, -h); b = Math.min(b, h);
+      if (b - a < 0.05) continue;
+      T.push(...cuboid(a, b, y - dtY/2, y + dtY/2, bottom - 0.4, topY));
+    }
   }
   return T;
 }
@@ -1004,15 +1089,17 @@ function parseAngles(txt, count) {
 }
 
 // Radial dividers in a cylinder: rotated spokes from the center, welded
-// into the wall with a bite that stays inside the outer radius
-function buildRadialDividers(D, wall, bottom, angles, top, dt) {
+// into the wall with a bite that stays inside the outer radius. A spoke
+// whose key ("r<index>") is in `gaps` is skipped, merging its two sectors.
+function buildRadialDividers(D, wall, bottom, angles, top, dt, gaps = new Set()) {
   const T = [];
   const rOut = D/2 - wall + Math.min(wall, 1.2);
-  for (const a of angles) {
-    const c = Math.cos(a), s = Math.sin(a);
+  angles.forEach((a, s) => {
+    if (gaps.has(`r${s}`)) return;
+    const c = Math.cos(a), sn = Math.sin(a);
     T.push(...cuboid(0, rOut, -dt/2, dt/2, bottom - 0.4, top)
-      .map(t => t.map(p => [p[0]*c - p[1]*s, p[0]*s + p[1]*c, p[2]])));
-  }
+      .map(t => t.map(p => [p[0]*c - p[1]*sn, p[0]*sn + p[1]*c, p[2]])));
+  });
   return T;
 }
 
@@ -1312,6 +1399,11 @@ let mode = "outer";
 let shape = "rect";      // rect | cyl
 let unit = "mm";         // mm | in — display only; geometry and STL stay in mm
 let lidType = "none";    // none | friction | hinge | slide | screw
+// removed divider segments (cell merges): "x<div>.<row>", "y<div>.<col>",
+// "r<spoke>". Keys index the current grid; stale keys are kept in memory
+// (so shrinking and regrowing the grid restores them) but only the ones
+// valid for the current grid are built, drawn, and serialized.
+let merged = new Set(), mgValid = [];
 let hingeKind = "pip";   // pip | pin | snap
 let latchKind = "flap";  // flap | tongue | none
 let model = null;        // { boxTris, lidTris, L, W, H, raw, ok }
@@ -1354,6 +1446,7 @@ en: {
   w_thrh: "Thread height must be at least 6 mm and leave 2 mm of wall below.",
   w_thrdia: "The screw lid needs a diameter of 24 mm or more.",
   resetTip: "Reset to default",
+  mgClear: "Restore all merged walls",
   fit_both: "Grips both walls",
   w_nogrip: "Neither grip is ticked — the lid will just rest on the rim.",
   w_pinch: "Gripping both sides of a wall thinner than 0.6 mm would pinch it shut — thicken the wall or untick one grip.",
@@ -1374,6 +1467,7 @@ en: {
   clr_screw: "how freely the thread runs", f_lip: "Lip height",
   f_tor: "Lid body height <small>above the seam</small>", f_skirt: "Lid skirt height <small>apron over the walls</small>",
   f_lidT: "Lid thickness",
+  f_map: "Zone map <small>click a wall to merge the two cells; click the faint mark to split them again</small>",
   f_zones: "Zones <small>equal split</small>",
   f_dvpx: "Positions <small>length units or % from the left inner wall; overrides zones</small>",
   f_dvpy: "Positions <small>length units or % from the front inner wall; overrides zones</small>",
@@ -1436,6 +1530,7 @@ fr: {
   w_thrh: "La hauteur du filetage doit faire au moins 6 mm et laisser 2 mm de paroi en dessous.",
   w_thrdia: "Le couvercle vissé exige un diamètre d'au moins 24 mm.",
   resetTip: "Rétablir la valeur par défaut",
+  mgClear: "Rétablir toutes les cloisons fusionnées",
   fit_both: "Serre les deux parois",
   w_nogrip: "Aucune prise cochée — le couvercle reposera simplement sur le bord.",
   w_pinch: "Serrer les deux côtés d\u2019une paroi de moins de 0,6 mm la pincerait — épaississez la paroi ou décochez une prise.",
@@ -1456,6 +1551,7 @@ fr: {
   clr_screw: "souplesse du filetage", f_lip: "Hauteur du rebord",
   f_tor: "Hauteur du corps <small>au-dessus du joint</small>", f_skirt: "Hauteur de la jupe <small>tablier sur les parois</small>",
   f_lidT: "Épaisseur du couvercle",
+  f_map: "Plan des zones <small>cliquez sur une cloison pour fusionner les deux cases ; cliquez sur le trait pâle pour les séparer</small>",
   f_zones: "Zones <small>partage égal</small>",
   f_dvpx: "Positions <small>en unités ou % depuis la paroi gauche ; prioritaire sur les zones</small>",
   f_dvpy: "Positions <small>en unités ou % depuis la paroi avant ; prioritaire sur les zones</small>",
@@ -1518,6 +1614,7 @@ de: {
   w_thrh: "Die Gewindehöhe muss mindestens 6 mm betragen und 2 mm Wand darunter lassen.",
   w_thrdia: "Der Schraubdeckel braucht mindestens 24 mm Durchmesser.",
   resetTip: "Auf Standard zurücksetzen",
+  mgClear: "Alle verbundenen Trennwände wiederherstellen",
   fit_both: "Greift beide Wände",
   w_nogrip: "Kein Griff gewählt — der Deckel liegt nur lose auf dem Rand.",
   w_pinch: "Eine Wand unter 0,6 mm von beiden Seiten zu greifen würde sie zuquetschen — Wand verdicken oder einen Griff abwählen.",
@@ -1538,6 +1635,7 @@ de: {
   clr_screw: "Gängigkeit des Gewindes", f_lip: "Lippenhöhe",
   f_tor: "Deckelkörper-Höhe <small>über der Fuge</small>", f_skirt: "Schürzenhöhe <small>über den Wänden</small>",
   f_lidT: "Deckelstärke",
+  f_map: "Zonenplan <small>Trennwand anklicken, um die beiden Zellen zu verbinden; blasse Linie anklicken, um wieder zu teilen</small>",
   f_zones: "Zonen <small>gleichmäßig</small>",
   f_dvpx: "Positionen <small>Längeneinheiten oder % von der linken Innenwand; überschreibt Zonen</small>",
   f_dvpy: "Positionen <small>Längeneinheiten oder % von der vorderen Innenwand; überschreibt Zonen</small>",
@@ -1600,6 +1698,7 @@ es: {
   w_thrh: "La altura de la rosca debe ser de al menos 6 mm y dejar 2 mm de pared debajo.",
   w_thrdia: "La tapa roscada necesita un diámetro de al menos 24 mm.",
   resetTip: "Restablecer el valor predeterminado",
+  mgClear: "Restaurar todas las paredes fusionadas",
   fit_both: "Agarra ambas paredes",
   w_nogrip: "No hay ningún agarre marcado: la tapa solo se apoyará en el borde.",
   w_pinch: "Agarrar ambos lados de una pared de menos de 0,6 mm la aplastaría: engrosa la pared o desmarca un agarre.",
@@ -1620,6 +1719,7 @@ es: {
   clr_screw: "suavidad de la rosca", f_lip: "Altura del labio",
   f_tor: "Altura del cuerpo <small>sobre la junta</small>", f_skirt: "Altura del faldón <small>sobre las paredes</small>",
   f_lidT: "Grosor de la tapa",
+  f_map: "Plano de zonas <small>pulsa una pared para unir las dos celdas; pulsa la marca tenue para separarlas</small>",
   f_zones: "Zonas <small>partes iguales</small>",
   f_dvpx: "Posiciones <small>unidades o % desde la pared izquierda; anula las zonas</small>",
   f_dvpy: "Posiciones <small>unidades o % desde la pared frontal; anula las zonas</small>",
@@ -1682,6 +1782,7 @@ zh: {
   w_thrh: "螺纹高度至少 6 mm，且下方需留 2 mm 壁高。",
   w_thrdia: "螺纹盖需要直径不小于 24 mm。",
   resetTip: "恢复默认值",
+  mgClear: "恢复所有已合并的隔板",
   fit_both: "内外壁同时卡住",
   w_nogrip: "未勾选任何卡合方式——盖子只会搁在边沿上。",
   w_pinch: "从两侧夹住薄于 0.6 mm 的壁会把它夹死——请加厚壁或取消一侧卡合。",
@@ -1702,6 +1803,7 @@ zh: {
   clr_screw: "螺纹旋合的松紧", f_lip: "内唇高度",
   f_tor: "盖体高度 <small>接缝以上</small>", f_skirt: "裙边高度 <small>包住外壁</small>",
   f_lidT: "盖厚",
+  f_map: "分区图 <small>点击隔板即可合并两侧单元格；点击虚线可重新分开</small>",
   f_zones: "分区 <small>均分</small>",
   f_dvpx: "位置 <small>长度单位或 %，从左内壁起；优先于分区</small>",
   f_dvpy: "位置 <small>长度单位或 %，从前内壁起；优先于分区</small>",
@@ -1764,6 +1866,7 @@ ru: {
   w_thrh: "Высота резьбы — от 6 мм, и под ней должно оставаться 2 мм стенки.",
   w_thrdia: "Резьбовой крышке нужен диаметр от 24 мм.",
   resetTip: "Вернуть значение по умолчанию",
+  mgClear: "Восстановить все объединённые перегородки",
   fit_both: "Держится за обе стенки",
   w_nogrip: "Ни одна хватка не выбрана — крышка будет просто лежать на кромке.",
   w_pinch: "Хватка с обеих сторон стенки тоньше 0,6 мм пережмёт её — утолстите стенку или снимите одну галочку.",
@@ -1784,6 +1887,7 @@ ru: {
   clr_screw: "лёгкость хода резьбы", f_lip: "Высота бортика",
   f_tor: "Высота торса <small>над стыком</small>", f_skirt: "Высота юбки <small>фартук по стенкам</small>",
   f_lidT: "Толщина крышки",
+  f_map: "Карта зон <small>щёлкните по перегородке, чтобы объединить две ячейки; щёлкните по пунктиру, чтобы снова разделить</small>",
   f_zones: "Зоны <small>поровну</small>",
   f_dvpx: "Позиции <small>в единицах длины или % от левой стенки; важнее зон</small>",
   f_dvpy: "Позиции <small>в единицах длины или % от передней стенки; важнее зон</small>",
@@ -1855,6 +1959,7 @@ function applyLang() {
   $("slideNote").innerHTML = T("slideNote");
   $("screwNote").innerHTML = T("screwNote");
   document.querySelectorAll(".rst").forEach(b => b.title = T("resetTip"));
+  $("mgReset").title = T("mgClear");
   document.querySelector("footer").textContent = T("footer");
   document.querySelector(".hud.tl").innerHTML = T("hud_hint");
   document.querySelector(".hud.br").innerHTML = `${T("hud_outer")}<div class="dims" id="hudDims"></div>`;
@@ -1910,6 +2015,44 @@ function rebuild() {
   const pr = shape === "cyl" && divOn                       // radial dividers (cylinders only)
     ? parseAngles($("dvpr").value, Math.max(1, Math.round(raw.zr)))
     : { ang: [], bad: false, custom: false };
+  const xsAbs = px.pos.map(o => -ix + o), ysAbs = py.pos.map(o => -iy + o);
+  const cylRi = shape === "cyl" ? L/2 - raw.wall : null;
+  const planX = divPlan(xsAbs, raw.dvtx, ysAbs, iy, cylRi, raw.wall);
+  const planY = divPlan(ysAbs, raw.dvty, xsAbs, ix, cylRi, raw.wall);
+
+  // cell merges valid for this grid, and the resulting region counts
+  const colsN = xsAbs.length + 1, rowsN = ysAbs.length + 1;
+  mgValid = [...merged].filter(k => {
+    let m;
+    if ((m = k.match(/^x(\d+)\.(\d+)$/))) return +m[1] < xsAbs.length && +m[2] < rowsN;
+    if ((m = k.match(/^y(\d+)\.(\d+)$/))) return +m[1] < ysAbs.length && +m[2] < colsN;
+    if ((m = k.match(/^r(\d+)$/))) return pr.ang.length >= 2 && +m[1] < pr.ang.length;
+    return false;
+  });
+  const mgSet = new Set(mgValid);
+  const countRegions = (n, pairs) => { // union-find over cells
+    const id = Array.from({ length: n }, (_, i) => i);
+    const find = a => id[a] === a ? a : (id[a] = find(id[a]));
+    for (const [a, b] of pairs) id[find(a)] = find(b);
+    return new Set(id.map((_, i) => find(i))).size;
+  };
+  // two cells share a region when the wall between them is merged away OR
+  // never physically existed (a chord clipped by the round shell)
+  const gridPairs = [], radPairs = [];
+  for (let k = 0; k < xsAbs.length; k++)
+    for (let j = 0; j < rowsN; j++)
+      if (!planX[k].segs[j].on || mgSet.has(`x${k}.${j}`))
+        gridPairs.push([j*colsN + k, j*colsN + k + 1]);
+  for (let m = 0; m < ysAbs.length; m++)
+    for (let i = 0; i < colsN; i++)
+      if (!planY[m].segs[i].on || mgSet.has(`y${m}.${i}`))
+        gridPairs.push([m*colsN + i, (m + 1)*colsN + i]);
+  for (const k of mgValid) {
+    const m = k.match(/^r(\d+)$/);
+    if (m) radPairs.push([(+m[1] + pr.ang.length - 1) % pr.ang.length, +m[1]]);
+  }
+  const regions = countRegions(colsN * rowsN, gridPairs);
+  const regionsR = pr.ang.length >= 2 ? countRegions(pr.ang.length, radPairs) : 0;
 
   const warnings = []; // fatal — block the build
   const advice = [];   // informational — the model still builds
@@ -1953,13 +2096,27 @@ function rebuild() {
     if (L < 30) warnings.push(T("w_slidel"));
   }
   if (px.bad || py.bad || pr.bad) warnings.push(T("w_divparse"));
-  if ((px.pos.length || py.pos.length) && Math.min(...zsx, ...zsy) < 3)
+  // a zone narrower than 3 mm only matters where its bounding walls are
+  // both physically present — merging the tight wall away clears the flag
+  const tightZone = (zs, plan, crossN, key) => {
+    const mat = (d, j) => plan[d].segs[j].on && !mgSet.has(`${key}${d}.${j}`);
+    for (let i = 0; i < zs.length; i++) {
+      if (zs[i] >= 3) continue;
+      for (let j = 0; j < crossN; j++)
+        if ((i === 0 || mat(i - 1, j)) && (i === zs.length - 1 || mat(i, j))) return true;
+    }
+    return false;
+  };
+  if ((px.pos.length || py.pos.length)
+      && (tightZone(zsx, planX, rowsN, "x") || tightZone(zsy, planY, colsN, "y")))
     warnings.push(T("w_divtight"));
-  if (pr.ang.length >= 2) { // sector width at the rim
-    const a = pr.ang, riC = L/2 - raw.wall;
-    let gmin = 2*Math.PI - (a[a.length - 1] - a[0]);
-    for (let i = 1; i < a.length; i++) gmin = Math.min(gmin, a[i] - a[i-1]);
-    if (gmin * riC - raw.dvtr < 3) warnings.push(T("w_sectight"));
+  if (pr.ang.length >= 2) { // sector width at the rim, over surviving spokes
+    const a = pr.ang.filter((_, s) => !mgSet.has(`r${s}`)), riC = L/2 - raw.wall;
+    if (a.length >= 2) {
+      let gmin = 2*Math.PI - (a[a.length - 1] - a[0]);
+      for (let i = 1; i < a.length; i++) gmin = Math.min(gmin, a[i] - a[i-1]);
+      if (gmin * riC - raw.dvtr < 3) warnings.push(T("w_sectight"));
+    }
   }
   if ((raw.dvhx > 0 && raw.dvhx < 2) || (raw.dvhy > 0 && raw.dvhy < 2) || (raw.dvhr > 0 && raw.dvhr < 2))
     warnings.push(T("w_divparth"));
@@ -2006,12 +2163,12 @@ function rebuild() {
       const topX = raw.dvhx > 0 ? Math.min(raw.bottom + raw.dvhx, divTop) : divTop;
       const topY = raw.dvhy > 0 ? Math.min(raw.bottom + raw.dvhy, divTop) : divTop;
       base.push(...buildDividers(L, W, raw.wall, raw.bottom,
-        px.pos.map(o => -ix + o), topX, raw.dvtx, py.pos.map(o => -iy + o), topY, raw.dvty,
-        shape === "cyl" ? L/2 - raw.wall : null));
+        xsAbs, topX, raw.dvtx, ysAbs, topY, raw.dvty,
+        shape === "cyl" ? L/2 - raw.wall : null, mgSet));
     }
     if (pr.ang.length) {
       const topR = raw.dvhr > 0 ? Math.min(raw.bottom + raw.dvhr, divTop) : divTop;
-      base.push(...buildRadialDividers(L, raw.wall, raw.bottom, pr.ang, topR, raw.dvtr));
+      base.push(...buildRadialDividers(L, raw.wall, raw.bottom, pr.ang, topR, raw.dvtr, mgSet));
     }
     if (raw.fbi > 0.05)
       base.push(...innerFillet(L, W, raw.wall, raw.bottom, R, raw.fbi));
@@ -2082,11 +2239,12 @@ function rebuild() {
       [boxName, plastic(volBox)],
     ];
     if (pr.ang.length >= 2)
-      rows.splice(2, 0, [T("s_sect"), pr.custom
+      rows.splice(2, 0, [T("s_sect"), (pr.custom
         ? pr.ang.map(a => Math.round(a * 180 / Math.PI) + "°").join(" / ")
-        : String(pr.ang.length)]);
+        : String(pr.ang.length)) + (regionsR && regionsR < pr.ang.length ? ` → ${regionsR}` : "")]);
     if (px.pos.length || py.pos.length) {
-      rows.splice(2, 0, [T("s_zones"), `${px.pos.length + 1} × ${py.pos.length + 1}`]);
+      rows.splice(2, 0, [T("s_zones"), `${colsN} × ${rowsN}`
+        + (regions < colsN * rowsN ? ` → ${regions}` : "")]);
       let at = 3;
       if (px.pos.length)
         rows.splice(at++, 0, [T("s_zonel"), `${zsx.map(s => fmtL(s)).join(" / ")} <i>${unit}</i>`]);
@@ -2116,6 +2274,7 @@ function rebuild() {
   $("dlBox").disabled = !ok;
   $("dlLid").disabled = !ok;
 
+  drawDivMap(ix, iy, R - raw.wall, xsAbs, ysAbs, raw, pr, mgSet);
   prepareScene();
   refreshResets();
   scheduleHashUpdate();
@@ -2471,6 +2630,66 @@ function onLidTreeChange() {
 for (const id of ["lidOn", "kindSeg", "retSeg", "fitSeg", "hingeSeg", "latchSeg"])
   $(id).addEventListener("change", onLidTreeChange);
 
+/* ── zone map: a clickable plan of the divider grid ──
+   Every divider segment gets a visible line plus a fat invisible hit line;
+   clicking toggles the segment's key in `merged`, merging or re-splitting
+   the two cells it parts. Removed segments stay as faint dashed marks. */
+function drawDivMap(ix, iy, Ri, xs, ys, raw, pr, gaps) {
+  const on = $("divOn").checked && (xs.length > 0 || ys.length > 0 || pr.ang.length >= 2);
+  $("fMap").style.display = on ? "" : "none";
+  $("mgReset").style.visibility = mgValid.length ? "visible" : "hidden";
+  if (!on) return;
+  const cyl = shape === "cyl", ri = ix;
+  // the exact segment plan the mesh builder uses — every built segment is
+  // drawn and clickable, and nothing is drawn that isn't built
+  const cylRi = cyl ? ri : null;
+  const planX = divPlan(xs, raw.dvtx, ys, iy, cylRi, raw.wall);
+  const planY = divPlan(ys, raw.dvty, xs, ix, cylRi, raw.wall);
+  // the map is the view from above: X right, box front (−Y) at the bottom
+  const seg = (x1, y1, x2, y2, key) => {
+    const gone = gaps.has(key);
+    const at = `x1="${x1.toFixed(2)}" y1="${(-y1).toFixed(2)}" x2="${x2.toFixed(2)}" y2="${(-y2).toFixed(2)}"`;
+    return `<g><line class="seg${gone ? " gone" : ""}" ${at}${
+      gone ? ` stroke-dasharray="${(Math.max(ix, iy) / 22).toFixed(2)}"` : ""}/>` +
+      `<line class="hit" data-key="${key}" tabindex="0" role="button" aria-label="${key}" ${at}/></g>`;
+  };
+  let s = cyl
+    ? `<circle class="shell" cx="0" cy="0" r="${ri.toFixed(2)}"/>`
+    : `<rect class="shell" x="${-ix}" y="${-iy}" width="${2*ix}" height="${2*iy}" rx="${Math.max(Ri, 0).toFixed(2)}"/>`;
+  for (let k = 0; k < xs.length; k++)
+    planX[k].segs.forEach((sg, j) => {
+      if (sg.on) s += seg(xs[k], sg.a, xs[k], sg.b, `x${k}.${j}`);
+    });
+  for (let m = 0; m < ys.length; m++)
+    planY[m].segs.forEach((sg, i) => {
+      if (sg.on) s += seg(sg.a, ys[m], sg.b, ys[m], `y${m}.${i}`);
+    });
+  if (pr.ang.length >= 2)
+    pr.ang.forEach((a, i) => { s += seg(0, 0, ri * Math.cos(a), ri * Math.sin(a), `r${i}`); });
+  const p = Math.max(ix, iy) * 0.03 + 0.8;
+  $("divMap").setAttribute("viewBox",
+    `${(-ix - p).toFixed(2)} ${(-iy - p).toFixed(2)} ${(2*(ix + p)).toFixed(2)} ${(2*(iy + p)).toFixed(2)}`);
+  $("divMap").innerHTML = s;
+}
+function toggleMerge(key, refocus) {
+  if (merged.has(key)) merged.delete(key); else merged.add(key);
+  rebuild();
+  if (refocus) { // the map was just re-rendered; put focus back
+    const hit = document.querySelector(`#divMap .hit[data-key="${key}"]`);
+    if (hit) hit.focus();
+  }
+}
+$("divMap").addEventListener("click", e => {
+  const key = e.target.dataset && e.target.dataset.key;
+  if (key) toggleMerge(key, false);
+});
+$("divMap").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const key = e.target.dataset && e.target.dataset.key;
+  if (key) { e.preventDefault(); toggleMerge(key, true); }
+});
+$("mgReset").addEventListener("click", () => { merged.clear(); rebuild(); });
+
 // dividers are opt-in; switching them on with untouched settings seeds a split
 const DIV_IDS = ["zx", "zy", "dvpx", "dvpy", "dvhx", "dvhy", "dvtx", "dvty", "zr", "dvpr", "dvhr", "dvtr"];
 const dividersTouched = () => DIV_IDS.some(id => $(id).value !== defVal(id));
@@ -2535,6 +2754,7 @@ function stateQS() { // only values that differ from the defaults
     if (gripOut()) p.set("go", "1");
   }
   for (const id of INPUT_IDS) if ($(id).value !== defVal(id)) p.set(id, $(id).value);
+  if (mgValid.length) p.set("mg", [...mgValid].sort().join(",")); // cell merges
   return p.toString();
 }
 
@@ -2570,6 +2790,14 @@ function applyState(qs) {
   $("gripIn").checked = gi;
   $("gripOut").checked = go;
   for (const id of INPUT_IDS) $(id).value = p.has(id) ? p.get(id) : defVal(id);
+  // merge keys canonicalize through parseInt so "x01.2" can't shadow "x1.2"
+  merged = new Set(get("mg", "").split(",").map(t => {
+    let m;
+    if ((m = t.match(/^x(\d+)\.(\d+)$/))) return `x${+m[1]}.${+m[2]}`;
+    if ((m = t.match(/^y(\d+)\.(\d+)$/))) return `y${+m[1]}.${+m[2]}`;
+    if ((m = t.match(/^r(\d+)$/))) return `r${+m[1]}`;
+    return null;
+  }).filter(Boolean));
   $("unitSel").value = unit;
   setRadio("mode", mode);
   setRadio("shape", shape);
